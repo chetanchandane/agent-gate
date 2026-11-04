@@ -33,6 +33,9 @@ One dated entry per deviation from the PRD or notable implementation choice.
   protect holdout cases per case as well as in aggregate, use paired/statistical
   acceptance criteria, make spend accounting concurrency-safe, and pin model
   and pricing inputs for reproducible reports.
+- M1 now applies the deterministic emergency trigger rules during routing, in
+  addition to the model's urgency label. This prevents a model misclassification
+  from sending a known emergency into booking or clarification.
 
 ## 2026-11-04 M1 domain app
 

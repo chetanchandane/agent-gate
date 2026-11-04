@@ -18,7 +18,7 @@ from app.context import RunContext
 from app.errors import ToolError
 from app.policy_types import Policy
 from app.prompts import build_system_prompt
-from app.rules import in_service_area, missing_required_fields
+from app.rules import detect_emergency, in_service_area, missing_required_fields
 from app.state import AgentState, IntakeResult, Urgency
 from app.tools import Tools
 from app.tracing import AgentTracer
@@ -66,7 +66,7 @@ def build_graph(
     def route(state: AgentState) -> dict[str, Any]:
         with tracer.span("node.route"):
             intake_result = state.intake or IntakeResult()
-            if state.urgency == "emergency":
+            if detect_emergency(state.message) or state.urgency == "emergency":
                 decision = "escalate"
             elif missing_required_fields(intake_result):
                 decision = "clarify"

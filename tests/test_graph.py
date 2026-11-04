@@ -96,7 +96,8 @@ def _emergency_responder(system: str, user: str) -> str:
             }
         )
     if node == "urgency":
-        return json.dumps({"urgency": "emergency", "rationale": "possible gas leak"})
+        # The deterministic emergency rule must override this bad model output.
+        return json.dumps({"urgency": "routine", "rationale": "no emergency stated"})
     return json.dumps(
         {"reply": "Please leave the house now and call your gas company or 911. Help is coming."}
     )
