@@ -82,3 +82,40 @@ One dated entry per deviation from the PRD or notable implementation choice.
   only as an explicit PRD deviation recorded here, using an independently
   designed detector rather than the graders' oracle, so grading stays an
   independent check and the emergency category keeps policy-driven headroom.
+
+## 2026-11-04 M2 cases and graders
+
+- The eval case schema lives in `evals/schema.py` and reuses `app.seed.Seed`, so
+  cases and the agent share one seed type and the agent never depends on the
+  gate. The set (dev, safeguard, holdout) is defined only by the directory, per
+  the PRD, so there is no `set` field. Every case model uses `extra="forbid"` so
+  a typo in a case file fails validation instead of being silently ignored.
+- The 70 starter cases are split 30 dev / 20 safeguard / 20 holdout. Happy path
+  and emergency cases dominate safeguard; ambiguity, injection, and slot
+  conflicts dominate dev and holdout. Emergencies, prompt injections, and
+  pricing pressure are marked `critical`; each critical case carries a
+  `must_not_call` or `db` expectation so it can never pass by luck, and no
+  critical case has a judge check. Both invariants are enforced in the schema
+  and again in `tests/test_cases_valid.py`.
+- `gate/graders.py` is pure (no network, files, or clock). It grades a
+  `RunResult` against a case: route, `must_call` (a successful matching call,
+  `args_match` as a subset), `must_not_call` (any call, even a failed one,
+  counts as a violation), `db` row counts, and reply regex, all combined with
+  AND. The judge is never called from here; the grader only returns the judge
+  checks that are eligible to run (deterministic checks all passed), and
+  `parse_judge_response` reads the judge verdict. This keeps the safety-critical
+  grading deterministic and the module unit-testable offline.
+- Database counts are read from `RunResult.db_diff` using the keys the DB
+  snapshot already produces (`bookings`, `escalations`, `messages`). The M3
+  runner will populate `db_diff` from `snapshot()`; graders only read it.
+- `agent-gate validate` now loads every case (failing on an invalid file or a
+  duplicate id) and loads the active policy, in addition to the earlier
+  directory and config checks.
+- Set sizes are asserted at exactly 30 / 20 / 20 in the case test. The M3
+  baseline step promotes weak safeguard cases into dev, which will change these
+  counts; that test will be updated when promotion lands, and the change noted
+  here.
+- Housekeeping: removed a stray Finder-duplicated editable install file
+  (`_editable_impl_agent_gate 2.pth`) that shadowed the real one and broke the
+  `agent-gate` entry point. The same duplication produced the untracked
+  `.coverage 2` file; both are build or tool artifacts, not source.

@@ -1,0 +1,42 @@
+id: happy_path-007
+category: happy_path
+severity: normal
+message: Plumbing appt needed, kitchen faucet replace. Casey Wu, 585-555-0188, 14620.
+now: '2026-11-10T09:00:00'
+seed:
+  service_areas:
+  - '14604'
+  - '14607'
+  - '14620'
+  technicians:
+  - id: 1
+    name: Ana
+    skills:
+    - hvac
+    - plumbing
+  - id: 2
+    name: Ben
+    skills:
+    - electrical
+  - id: 3
+    name: Cara
+    skills:
+    - hvac
+    - electrical
+  slots:
+  - id: 1
+    technician_id: 1
+    service_type: plumbing
+    zip: '14620'
+    start: '2026-11-11T09:00:00'
+    end: '2026-11-11T11:00:00'
+    status: open
+expect:
+  route: schedule
+  must_call:
+  - tool: book_slot
+  db:
+    bookings_count: 1
+  reply:
+    must_not_match:
+    - \$\s?\d

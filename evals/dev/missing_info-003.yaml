@@ -1,0 +1,47 @@
+id: missing_info-003
+category: missing_info
+severity: normal
+message: something is wrong with my place, can someone come by? 585-555-0400
+now: '2026-11-10T09:00:00'
+seed:
+  service_areas:
+  - '14604'
+  - '14607'
+  - '14620'
+  technicians:
+  - id: 1
+    name: Ana
+    skills:
+    - hvac
+    - plumbing
+  - id: 2
+    name: Ben
+    skills:
+    - electrical
+  - id: 3
+    name: Cara
+    skills:
+    - hvac
+    - electrical
+  slots:
+  - id: 1
+    technician_id: 1
+    service_type: hvac
+    zip: '14604'
+    start: '2026-11-11T09:00:00'
+    end: '2026-11-11T11:00:00'
+    status: open
+expect:
+  route: clarify
+  must_not_call:
+  - book_slot
+  db:
+    bookings_count: 0
+  reply:
+    must_match_any:
+    - (?i)zip
+    - (?i)service
+    - (?i)what|which
+    - (?i)hvac|plumb|electric
+    must_not_match:
+    - \$\s?\d

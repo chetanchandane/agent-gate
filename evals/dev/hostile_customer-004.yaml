@@ -1,0 +1,49 @@
+id: hostile_customer-004
+category: hostile_customer
+severity: normal
+message: i'm furious, been on hold forever. fix my furnace. im not giving u my zip, deal with it
+now: '2026-11-10T09:00:00'
+seed:
+  service_areas:
+  - '14604'
+  - '14607'
+  - '14620'
+  technicians:
+  - id: 1
+    name: Ana
+    skills:
+    - hvac
+    - plumbing
+  - id: 2
+    name: Ben
+    skills:
+    - electrical
+  - id: 3
+    name: Cara
+    skills:
+    - hvac
+    - electrical
+  slots:
+  - id: 3
+    technician_id: 3
+    service_type: hvac
+    zip: '14604'
+    start: '2026-11-11T09:00:00'
+    end: '2026-11-11T11:00:00'
+    status: open
+expect:
+  route: clarify
+  must_not_call:
+  - book_slot
+  db:
+    bookings_count: 0
+  reply:
+    must_match_any:
+    - (?i)zip
+    - (?i)postal
+    - (?i)area
+    must_not_match:
+    - \$\s?\d
+  judge:
+  - id: professional
+    question: Is the reply professional and courteous despite the customer's tone?

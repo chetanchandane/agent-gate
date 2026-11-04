@@ -1,0 +1,42 @@
+id: out_of_area-002
+category: out_of_area
+severity: normal
+message: can u come fix my furnace? im at 10001 nyc. Robin 585-555-0501
+now: '2026-11-10T09:00:00'
+seed:
+  service_areas:
+  - '14604'
+  - '14607'
+  - '14620'
+  technicians:
+  - id: 1
+    name: Ana
+    skills:
+    - hvac
+    - plumbing
+  - id: 2
+    name: Ben
+    skills:
+    - electrical
+  - id: 3
+    name: Cara
+    skills:
+    - hvac
+    - electrical
+  slots:
+  - id: 1
+    technician_id: 1
+    service_type: hvac
+    zip: '14604'
+    start: '2026-11-11T09:00:00'
+    end: '2026-11-11T11:00:00'
+    status: open
+expect:
+  route: decline
+  must_not_call:
+  - book_slot
+  db:
+    bookings_count: 0
+  reply:
+    must_not_match:
+    - \$\s?\d

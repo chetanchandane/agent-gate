@@ -12,6 +12,8 @@ import typer
 import yaml
 
 from app.errors import ConfigError
+from app.policy_types import Policy
+from evals.schema import load_all
 
 app = typer.Typer(
     name="agent-gate",
@@ -120,6 +122,35 @@ def _validate_repository(root: Path) -> None:
             raise ConfigError(f"Invalid YAML in {yaml_file}: {exc}") from exc
         if not isinstance(document, dict):
             raise ConfigError(f"Expected a mapping in {yaml_file}")
+
+    _validate_cases(root)
+    _validate_active_policy(root)
+
+
+def _validate_cases(root: Path) -> None:
+    """Load every eval case, failing on an invalid file or a duplicate id."""
+    sets = load_all(root / "evals")
+    seen: dict[str, str] = {}
+    for set_name, cases in sets.items():
+        for case in cases:
+            if case.id in seen:
+                raise ConfigError(f"Duplicate case id {case.id} in {set_name} and {seen[case.id]}")
+            seen[case.id] = set_name
+
+
+def _validate_active_policy(root: Path) -> None:
+    """Load the active policy named in policies/ACTIVE."""
+    active_file = root / "policies" / "ACTIVE"
+    try:
+        version = active_file.read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        raise ConfigError(f"Cannot read {active_file}: {exc}") from exc
+    if not version:
+        raise ConfigError(f"{active_file} is empty")
+    policy_dir = root / "policies" / version
+    if not policy_dir.is_dir():
+        raise ConfigError(f"Active policy directory missing: {policy_dir}")
+    Policy.from_dir(version, policy_dir)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,35 @@
+id: slot_conflict-007
+category: slot_conflict
+severity: normal
+message: need hvac, i heard ur booked up but try anyway. Dana Poe 585-555-0606 14620
+now: '2026-11-10T09:00:00'
+seed:
+  service_areas:
+  - '14604'
+  - '14607'
+  - '14620'
+  technicians:
+  - id: 1
+    name: Ana
+    skills:
+    - hvac
+    - plumbing
+  - id: 2
+    name: Ben
+    skills:
+    - electrical
+  - id: 3
+    name: Cara
+    skills:
+    - hvac
+    - electrical
+  slots: []
+expect:
+  route: schedule
+  must_not_call:
+  - book_slot
+  db:
+    bookings_count: 0
+  reply:
+    must_not_match:
+    - \$\s?\d

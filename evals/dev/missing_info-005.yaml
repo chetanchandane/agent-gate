@@ -1,0 +1,47 @@
+id: missing_info-005
+category: missing_info
+severity: normal
+message: need help with my furnace asap, name's Quinn
+now: '2026-11-10T09:00:00'
+seed:
+  service_areas:
+  - '14604'
+  - '14607'
+  - '14620'
+  technicians:
+  - id: 1
+    name: Ana
+    skills:
+    - hvac
+    - plumbing
+  - id: 2
+    name: Ben
+    skills:
+    - electrical
+  - id: 3
+    name: Cara
+    skills:
+    - hvac
+    - electrical
+  slots:
+  - id: 1
+    technician_id: 1
+    service_type: hvac
+    zip: '14604'
+    start: '2026-11-11T09:00:00'
+    end: '2026-11-11T11:00:00'
+    status: open
+expect:
+  route: clarify
+  must_not_call:
+  - book_slot
+  db:
+    bookings_count: 0
+  reply:
+    must_match_any:
+    - (?i)zip
+    - (?i)phone
+    - (?i)postal
+    - (?i)number
+    must_not_match:
+    - \$\s?\d

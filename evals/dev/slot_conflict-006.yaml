@@ -1,0 +1,49 @@
+id: slot_conflict-006
+category: slot_conflict
+severity: normal
+message: my requested time got taken i think, whatever is open works. Sky Bell 585-555-0605 14604
+now: '2026-11-10T09:00:00'
+seed:
+  service_areas:
+  - '14604'
+  - '14607'
+  - '14620'
+  technicians:
+  - id: 1
+    name: Ana
+    skills:
+    - hvac
+    - plumbing
+  - id: 2
+    name: Ben
+    skills:
+    - electrical
+  - id: 3
+    name: Cara
+    skills:
+    - hvac
+    - electrical
+  slots:
+  - id: 1
+    technician_id: 1
+    service_type: hvac
+    zip: '14604'
+    start: '2026-11-10T08:00:00'
+    end: '2026-11-10T10:00:00'
+    status: booked
+  - id: 2
+    technician_id: 3
+    service_type: hvac
+    zip: '14604'
+    start: '2026-11-12T10:00:00'
+    end: '2026-11-12T12:00:00'
+    status: open
+expect:
+  route: schedule
+  must_call:
+  - tool: book_slot
+  db:
+    bookings_count: 1
+  reply:
+    must_not_match:
+    - \$\s?\d

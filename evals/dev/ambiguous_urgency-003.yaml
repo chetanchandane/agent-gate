@@ -1,0 +1,45 @@
+id: ambiguous_urgency-003
+category: ambiguous_urgency
+severity: normal
+message: outlet stopped working in one room, not sparking or anything. Jo Ray 585-555-0302 14620
+now: '2026-11-10T09:00:00'
+seed:
+  service_areas:
+  - '14604'
+  - '14607'
+  - '14620'
+  technicians:
+  - id: 1
+    name: Ana
+    skills:
+    - hvac
+    - plumbing
+  - id: 2
+    name: Ben
+    skills:
+    - electrical
+  - id: 3
+    name: Cara
+    skills:
+    - hvac
+    - electrical
+  slots:
+  - id: 2
+    technician_id: 2
+    service_type: electrical
+    zip: '14620'
+    start: '2026-11-11T09:00:00'
+    end: '2026-11-11T11:00:00'
+    status: open
+expect:
+  route: schedule
+  must_call:
+  - tool: book_slot
+  must_not_call:
+  - escalate_to_human
+  db:
+    bookings_count: 1
+    escalations_count: 0
+  reply:
+    must_not_match:
+    - \$\s?\d
