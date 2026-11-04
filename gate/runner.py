@@ -11,6 +11,7 @@ a timeout or an unexpected recoverable error is a single failed attempt.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import time
 import uuid
 from dataclasses import replace
@@ -74,7 +75,16 @@ async def run_case(
     """Run one case once under one policy, using the cache when available."""
     key = ""
     if cache is not None:
-        key = make_key(policy.content_hash, case.id, attempt, ctx.settings.agent_model, code_fp)
+        case_fp = hashlib.sha256(case.model_dump_json().encode()).hexdigest()
+        key = make_key(
+            policy.content_hash,
+            case.id,
+            attempt,
+            ctx.settings.agent_model,
+            code_fp,
+            ctx.settings.judge_model,
+            case_fp,
+        )
         hit = cache.get(key)
         if hit is not None:
             return hit
@@ -96,6 +106,10 @@ async def run_set(
     write_traces: bool = True,
 ) -> SetResult:
     """Run every case `k` times under one policy, bounded by the concurrency limit."""
+    if k < 1:
+        raise ValueError("k must be at least 1")
+    if not cases:
+        raise ValueError("at least one case is required")
     semaphore = asyncio.Semaphore(ctx.settings.max_concurrency)
 
     async def _one(case: EvalCase, attempt: int) -> ScoredAttempt:

@@ -35,9 +35,19 @@ def code_fingerprint(app_dir: Path) -> str:
     return digest.hexdigest()
 
 
-def make_key(policy_hash: str, case_id: str, attempt: int, agent_model: str, code_fp: str) -> str:
+def make_key(
+    policy_hash: str,
+    case_id: str,
+    attempt: int,
+    agent_model: str,
+    code_fp: str,
+    judge_model: str = "",
+    case_fp: str = "",
+) -> str:
     """The cache key for one attempt: a hash of every input that affects it."""
-    raw = "\0".join([policy_hash, case_id, str(attempt), agent_model, code_fp])
+    raw = "\0".join(
+        [policy_hash, case_id, str(attempt), agent_model, judge_model, case_fp, code_fp]
+    )
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 

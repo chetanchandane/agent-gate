@@ -117,5 +117,18 @@ def test_evaluate_baseline_runs_sets_without_promotion(tmp_path: Path) -> None:
     assert "hold at or above" in buffer.getvalue()
 
 
+def test_evaluate_baseline_uses_one_event_loop_for_multiple_sets(tmp_path: Path) -> None:
+    ctx = make_context(_responder)
+    console, _ = _console()
+    (tmp_path / "evals" / "safeguard").mkdir(parents=True)
+    (tmp_path / "evals" / "dev").mkdir(parents=True)
+    case = _happy_case()
+    sets = {"dev": [case], "safeguard": [case]}
+
+    results = driver.evaluate_baseline(ctx, tmp_path, console, load_v1(), sets, 2)
+
+    assert set(results) == {"dev", "safeguard"}
+
+
 def test_seed_shape_is_usable() -> None:
     assert _SEED["service_areas"] == ["14604"]

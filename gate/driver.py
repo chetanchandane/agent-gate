@@ -58,6 +58,10 @@ def run_one_set(
     root: Path, console: Console, policy_version: str, set_name: str, k: int, case_id: str | None
 ) -> None:
     """Build a live context and run a single set under one policy."""
+    if set_name not in {"dev", "safeguard", "holdout"}:
+        raise ConfigError(f"Unknown eval set: {set_name}")
+    if k < 1:
+        raise ConfigError("k must be at least 1")
     ctx = build_live_context(root, Settings())
     policy = load_policy(root, policy_version)
     cases = load_set(root / "evals" / set_name)
@@ -112,14 +116,11 @@ def evaluate_baseline(
     cache = RunCache(root / ".cache" / "runs.jsonl")
     code_fp = code_fingerprint(root / "app")
     results: dict[str, SetResult] = {}
-    try:
-        for name, cases in sets.items():
-            results[name] = asyncio.run(
-                run_set(ctx, policy, cases, k, name, cache=cache, code_fp=code_fp)
-            )
-            _print_set(console, policy, results[name])
-    except BudgetExceeded as exc:
-        console.print(f"[red]Spend cap reached, baseline incomplete: {exc}[/red]")
+    results, budget_error = asyncio.run(_run_baseline_sets(ctx, policy, sets, k, cache, code_fp))
+    for result in results.values():
+        _print_set(console, policy, result)
+    if budget_error is not None:
+        console.print(f"[red]Spend cap reached, baseline incomplete: {budget_error}[/red]")
         _print_spend(console, ctx)
         return results
 
@@ -136,6 +137,24 @@ def evaluate_baseline(
             )
     _print_spend(console, ctx)
     return results
+
+
+async def _run_baseline_sets(
+    ctx: RunContext,
+    policy: Policy,
+    sets: dict[str, list[EvalCase]],
+    k: int,
+    cache: RunCache,
+    code_fp: str,
+) -> tuple[dict[str, SetResult], str | None]:
+    """Run baseline sets on one event loop, preserving partial results on cap."""
+    results: dict[str, SetResult] = {}
+    try:
+        for name, cases in sets.items():
+            results[name] = await run_set(ctx, policy, cases, k, name, cache=cache, code_fp=code_fp)
+    except BudgetExceeded as exc:
+        return results, str(exc)
+    return results, None
 
 
 def promote_weak_safeguard(

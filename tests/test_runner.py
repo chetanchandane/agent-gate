@@ -160,3 +160,14 @@ async def test_cache_hit_adds_no_spend(tmp_path: Path) -> None:
     )
     assert ctx.spend.total_cost_usd == spend_after_first
     assert second.metrics.pass_rate == first.metrics.pass_rate
+
+
+async def test_run_set_rejects_invalid_inputs() -> None:
+    ctx = make_context(_responder)
+    case = _happy_case()
+    import pytest
+
+    with pytest.raises(ValueError, match="k must be at least 1"):
+        await run_set(ctx, load_v1(), [case], 0, "dev", write_traces=False)
+    with pytest.raises(ValueError, match="at least one case"):
+        await run_set(ctx, load_v1(), [], 1, "dev", write_traces=False)

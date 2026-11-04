@@ -31,6 +31,8 @@ def test_make_key_depends_on_every_input() -> None:
     assert base != make_key("hash", "case", 2, "model", "fp")
     assert base != make_key("hash", "case", 1, "model2", "fp")
     assert base != make_key("hash", "case", 1, "model", "fp2")
+    assert base != make_key("hash", "case", 1, "model", "fp", "judge2")
+    assert base != make_key("hash", "case", 1, "model", "fp", "", "case2")
     assert base == make_key("hash", "case", 1, "model", "fp")
 
 

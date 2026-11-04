@@ -170,3 +170,7 @@ One dated entry per deviation from the PRD or notable implementation choice.
 - Because the live baseline has not run, the eval sets are still 30 / 20 / 20
   and `tests/test_cases_valid.py` still asserts those sizes. The size assertion
   will be revisited after the first real baseline promotes any weak cases.
+- The cache key also includes the judge model and a fingerprint of the complete
+  case definition. This prevents stale grades after judge configuration or case
+  expectations change. Baseline sets run on one event loop so the shared,
+  concurrency-safe spend tracker remains valid across all three sets.
