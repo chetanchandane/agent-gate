@@ -123,3 +123,50 @@ One dated entry per deviation from the PRD or notable implementation choice.
   rather than treating missing evidence as zero rows. Reply regexes are
   validated when cases load, and judge responses enforce the exact documented
   boolean-and-string JSON shape.
+
+## 2026-11-04 M3 runner, metrics, and cache
+
+- `gate/metrics.py` is pure (no network, files, or clock). It defines the cached
+  unit `ScoredAttempt` (a `RunResult` plus its grade and any judge outcomes) and
+  computes a `SetResult`: pass rate as the mean of per-case scores, a Wilson 95
+  percent interval on the attempt level, flaky cases, cost, p50/p95 latency,
+  mean tool calls, and a failure histogram. Raw counts sit beside every rate.
+- `gate/runner.py` does the impure work. Each attempt builds a fresh in-memory
+  database from the case seed, runs the agent graph (via `build_graph`, not
+  `arun`, so the runner owns the root span and the trace id), grades
+  deterministically, and runs judge checks only when the deterministic checks
+  pass. `db_diff` is the post-run snapshot. Concurrency is a semaphore sized by
+  `MAX_CONCURRENCY`; a per-attempt timeout yields a failed attempt with reason
+  `timeout`; `BudgetExceeded` and `LLMError` (an infrastructure failure after
+  retries) propagate and abort the run rather than counting as policy failures.
+- Per-attempt tokens and cost are captured by wrapping the run's LLM client in a
+  small counting proxy and passing a `replace`d context to the graph, so the
+  shared spend tracker still enforces the global cap while each `RunResult` gets
+  its own usage. Judge calls go through the same proxy, so their cost is
+  attributed to the attempt and counts toward the cap.
+- `gate/cache.py` caches each scored attempt in `.cache/runs.jsonl`, keyed by
+  policy content hash, case id, attempt, agent model, and a fingerprint of all
+  `app/` code (plus `schema.sql`). A cache hit does no LLM work, so a repeated
+  baseline costs zero. The key deliberately excludes case content (per the PRD);
+  editing a case needs `--no-cache` or a cleared cache, which the runner and
+  later milestones will expose.
+- The cache stores the full scored attempt, judge verdicts included, so a repeat
+  run reproduces grades without re-calling the judge. The trade-off is that a
+  change to a case's deterministic expectations is not reflected until the cache
+  entry is regenerated; this matches the PRD cache key and is acceptable because
+  cases are frozen during a run.
+- `gate/driver.py` is the live glue for the `run` and `baseline` commands:
+  builds the live context, runs sets, prints `rich` tables, and performs the
+  safeguard promotion (any safeguard case below 95 percent moves to `evals/dev/`).
+  The orchestration takes an already-built context so it is unit-tested offline
+  with `FakeLLM`; only the thin live-context builder is exercised solely in real
+  runs.
+- The live `agent-gate baseline` run was not executed in this milestone: it
+  needs a real API key, spends against the cap, and mutates the eval sets via
+  promotion. Per the PRD cost discipline, that run is left for the user to start
+  deliberately. The runner, metrics, cache, promotion, and both commands are
+  proven offline with `FakeLLM` integration tests (happy path, emergency, judge,
+  repeated k, and a cache hit that adds no spend).
+- Because the live baseline has not run, the eval sets are still 30 / 20 / 20
+  and `tests/test_cases_valid.py` still asserts those sizes. The size assertion
+  will be revisited after the first real baseline promotes any weak cases.

@@ -44,7 +44,15 @@ def run(
     case: str | None = None,
 ) -> None:
     """Run one eval set under one policy and print a summary table."""
-    raise typer.Exit(_fail())
+    from rich.console import Console
+
+    from gate import driver
+
+    try:
+        driver.run_one_set(Path.cwd(), Console(), policy, set_, k, case)
+    except ConfigError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
 
 
 @app.command()
@@ -56,7 +64,15 @@ def gate(candidate: str, baseline_dir: str | None = None) -> None:
 @app.command()
 def baseline() -> None:
     """Run v1 on all sets with k = 5 and flag weak safeguard cases."""
-    raise typer.Exit(_fail())
+    from rich.console import Console
+
+    from gate import driver
+
+    try:
+        driver.run_baseline(Path.cwd(), Console())
+    except ConfigError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
 
 
 @app.command()
