@@ -1,5 +1,8 @@
 name: ci
 
+permissions:
+  contents: read
+
 on:
   push:
   pull_request:
@@ -32,4 +35,3 @@ jobs:
 
       - name: Validate data files
         run: uv run agent-gate validate
-        continue-on-error: true

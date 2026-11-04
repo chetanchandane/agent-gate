@@ -1,7 +1,11 @@
 name: gate
 
-# Runs the regression gate on pull requests that change policy files.
-# The gate logic lands in milestone M8; this is the workflow skeleton.
+# Runs non-secret repository validation for policy pull requests.
+# The live regression gate is intentionally not enabled until the runner and
+# gate implementation exist. This job must not expose an API key to PR code.
+
+permissions:
+  contents: read
 
 on:
   pull_request:
@@ -14,13 +18,14 @@ concurrency:
 
 jobs:
   gate:
-    # Skip for forks: they have no access to the ANTHROPIC_API_KEY secret.
-    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
-    env:
-      MAX_SPEND_USD: "5"
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     steps:
       - uses: actions/checkout@v4
-      - name: Placeholder
-        run: echo "Gate workflow is implemented in milestone M8."
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: uv sync
+      - name: Validate policy repository
+        run: uv run agent-gate validate

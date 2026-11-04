@@ -6,7 +6,12 @@ its command. Running an unimplemented command exits with a clear message.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import typer
+import yaml
+
+from app.errors import ConfigError
 
 app = typer.Typer(
     name="agent-gate",
@@ -21,7 +26,12 @@ _NOT_YET = "This command is not implemented yet. It lands in a later milestone."
 @app.command()
 def validate() -> None:
     """Validate every case file, policy directory, and config file."""
-    raise typer.Exit(_fail())
+    try:
+        _validate_repository(Path.cwd())
+    except ConfigError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
+    typer.echo("Repository validation passed.")
 
 
 @app.command()
@@ -80,6 +90,36 @@ def cost() -> None:
 def _fail() -> int:
     typer.echo(_NOT_YET, err=True)
     return 1
+
+
+def _validate_repository(root: Path) -> None:
+    """Validate the repository inputs available at the current milestone."""
+    required_directories = (
+        "app",
+        "config",
+        "evals/dev",
+        "evals/holdout",
+        "evals/safeguard",
+        "gate",
+        "policies",
+        "reports/decisions",
+        "tests",
+    )
+    missing_directories = [
+        directory for directory in required_directories if not (root / directory).is_dir()
+    ]
+    if missing_directories:
+        raise ConfigError("Missing required directories: " + ", ".join(sorted(missing_directories)))
+
+    yaml_files = (root / "config" / "gate.yaml", root / "config" / "pricing.yaml")
+    for yaml_file in yaml_files:
+        try:
+            with yaml_file.open(encoding="utf-8") as handle:
+                document = yaml.safe_load(handle)
+        except (OSError, yaml.YAMLError) as exc:
+            raise ConfigError(f"Invalid YAML in {yaml_file}: {exc}") from exc
+        if not isinstance(document, dict):
+            raise ConfigError(f"Expected a mapping in {yaml_file}")
 
 
 if __name__ == "__main__":
