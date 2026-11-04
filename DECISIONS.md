@@ -33,9 +33,6 @@ One dated entry per deviation from the PRD or notable implementation choice.
   protect holdout cases per case as well as in aggregate, use paired/statistical
   acceptance criteria, make spend accounting concurrency-safe, and pin model
   and pricing inputs for reproducible reports.
-- M1 now applies the deterministic emergency trigger rules during routing, in
-  addition to the model's urgency label. This prevents a model misclassification
-  from sending a known emergency into booking or clarification.
 
 ## 2026-11-04 M1 domain app
 
@@ -67,3 +64,21 @@ One dated entry per deviation from the PRD or notable implementation choice.
   (`agent-gate run --policy v1 --case happy_path-001 --k 1`) depend on the case
   loader (M2) and the runner (M3). M1 proves the graph end to end offline with
   `FakeLLM` integration tests (happy path, emergency, injection) instead.
+
+## 2026-11-04 Emergency routing stays policy-driven (revert of cd2f5cf)
+
+- A commit briefly made `route()` escalate whenever `detect_emergency(message)`
+  matched, in addition to the model's urgency label. That was reverted.
+- Reason: `app/rules.py` is the graders' ground-truth oracle (PRD section 4).
+  Calling it from the agent's routing makes every emergency case pass by
+  construction, collapses the agent/grader separation for that category, and
+  removes the deliberate v1 urgency weakness the improvement loop is meant to
+  fix through policy edits. It also added a broad over-escalation path that no
+  policy edit could correct.
+- Decision: emergency routing stays driven by the model's urgency label (the
+  node steered by `urgency.md`). Deterministic emergency detection remains
+  available to graders only, never to the agent.
+- A production-style deterministic safety backstop may be worthwhile later, but
+  only as an explicit PRD deviation recorded here, using an independently
+  designed detector rather than the graders' oracle, so grading stays an
+  independent check and the emergency category keeps policy-driven headroom.
