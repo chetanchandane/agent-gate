@@ -118,8 +118,16 @@ async def run_set(
                 ctx, policy, case, attempt, cache=cache, code_fp=code_fp, write_traces=write_traces
             )
 
-    tasks = [_one(case, attempt) for case in cases for attempt in range(1, k + 1)]
-    scored = await asyncio.gather(*tasks)
+    tasks = [
+        asyncio.create_task(_one(case, attempt)) for case in cases for attempt in range(1, k + 1)
+    ]
+    try:
+        scored = await asyncio.gather(*tasks)
+    except BaseException:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        raise
     ordered = sorted(scored, key=lambda s: (s.result.case_id, s.result.attempt))
     return SetResult.build(name, k, ordered)
 
