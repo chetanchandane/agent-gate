@@ -19,3 +19,23 @@ class InvalidProposal(AgentGateError):
 
 class ConfigError(AgentGateError):
     """Raised when a config or data file is missing or fails validation."""
+
+
+class LLMError(AgentGateError):
+    """Raised when an LLM call fails after retries or returns unusable output."""
+
+
+class ToolError(AgentGateError):
+    """Base class for recoverable failures raised by a mock tool."""
+
+
+class SlotTaken(ToolError):
+    """Raised when a slot is already booked."""
+
+
+class SlotNotFound(ToolError):
+    """Raised when a slot id does not exist."""
+
+
+class InvalidSlot(ToolError):
+    """Raised when a slot cannot be booked, for example a start time in the past."""

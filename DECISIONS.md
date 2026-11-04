@@ -33,3 +33,34 @@ One dated entry per deviation from the PRD or notable implementation choice.
   protect holdout cases per case as well as in aggregate, use paired/statistical
   acceptance criteria, make spend accounting concurrency-safe, and pin model
   and pricing inputs for reproducible reports.
+
+## 2026-11-04 M1 domain app
+
+- The shared types `Policy` (in `app/policy_types.py`) and `RunResult` (in
+  `app/runner_types.py`) live in `app/` so `gate/` can import them without
+  `app/` ever importing `gate/`. `Policy.from_dir` reads and hashes a policy
+  directory; the gate's loader and guard (M5) add validation on top rather than
+  redefining the type.
+- The seed types that build a case database live in `app/seed.py` rather than in
+  the eval schema. The eval case schema (M2) will reuse them, keeping the agent
+  independent of the gate.
+- Node-to-model mapping follows the PRD: `intake`, `urgency`, and the chosen
+  branch node plus `respond` each make one agent-model call; `route` is plain
+  Python. A branch node writes a draft reply steered by its own policy file, and
+  `respond` composes the final customer reply from that draft and calls
+  `send_message`. This is four model calls per attempt at most.
+- Spend accounting is concurrency-safe (an `asyncio.Lock` in `SpendTracker`).
+  When `config/pricing.yaml` is missing, per-call cost is reported as unknown
+  (`None`) and the dollar cap is enforced against a conservative token-based
+  estimate using a documented fallback rate in `app/llm.py`. This honors the
+  PRD rule that the cap still functions without a pricing file.
+- Only `app/llm.py` imports the Anthropic access path (`langchain_anthropic`),
+  and it does so lazily inside the live client so offline tests and `mypy` never
+  need the live dependency resolved. All non-live tests use `FakeLLM`.
+- Tracing uses the OpenTelemetry SDK with a custom JSONL span exporter per
+  attempt. A null tracer (no exporter) is provided so offline tests create real
+  spans without writing files.
+- The `run` CLI command and end-to-end live acceptance
+  (`agent-gate run --policy v1 --case happy_path-001 --k 1`) depend on the case
+  loader (M2) and the runner (M3). M1 proves the graph end to end offline with
+  `FakeLLM` integration tests (happy path, emergency, injection) instead.

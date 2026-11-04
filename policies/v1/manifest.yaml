@@ -1,0 +1,5 @@
+version: v1
+parent: null
+created_at: 2026-11-04T00:00:00Z
+source: human
+note: Hand written baseline. Deliberately incomplete so the loop has room to improve.
