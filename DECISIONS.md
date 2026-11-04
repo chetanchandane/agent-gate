@@ -119,3 +119,7 @@ One dated entry per deviation from the PRD or notable implementation choice.
   (`_editable_impl_agent_gate 2.pth`) that shadowed the real one and broke the
   `agent-gate` entry point. The same duplication produced the untracked
   `.coverage 2` file; both are build or tool artifacts, not source.
+- Graders now fail when an expected database table is absent from `db_diff`,
+  rather than treating missing evidence as zero rows. Reply regexes are
+  validated when cases load, and judge responses enforce the exact documented
+  boolean-and-string JSON shape.

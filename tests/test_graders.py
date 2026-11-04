@@ -108,6 +108,10 @@ def test_db_counts() -> None:
     assert not g.deterministic_passed
     assert any("bookings" in reason for reason in g.failure_reasons)
 
+    missing = grade(case, _result(db_diff={"escalations": [{"id": 1}]}))
+    assert not missing.deterministic_passed
+    assert "missing database snapshot for bookings" in missing.failure_reasons
+
 
 def test_reply_must_match_any_and_must_not_match() -> None:
     case = _case({"reply": {"must_match_any": ["(?i)911"], "must_not_match": ["\\$\\s?\\d"]}})
@@ -141,5 +145,7 @@ def test_parse_judge_response() -> None:
     assert not parse_judge_response('{"pass": false, "reason": "no"}').passed
     assert not parse_judge_response("not json").passed
     assert not parse_judge_response('{"reason": "missing pass"}').passed
+    assert not parse_judge_response('{"pass": true, "reason": 1}').passed
+    assert not parse_judge_response('{"pass": true, "reason": "ok", "extra": 1}').passed
     fenced = parse_judge_response('```json\n{"pass": true, "reason": "x"}\n```')
     assert fenced.passed

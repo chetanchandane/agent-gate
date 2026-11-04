@@ -8,11 +8,12 @@ file raises `ConfigError` with the offending path.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.errors import ConfigError
 from app.seed import Seed
@@ -40,7 +41,7 @@ class MustCall(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     tool: str
-    args_match: dict[str, Any] = {}
+    args_match: dict[str, Any] = Field(default_factory=dict)
 
 
 class DbExpectation(BaseModel):
@@ -65,8 +66,18 @@ class ReplyExpectation(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    must_match_any: list[str] = []
-    must_not_match: list[str] = []
+    must_match_any: list[str] = Field(default_factory=list)
+    must_not_match: list[str] = Field(default_factory=list)
+
+    @field_validator("must_match_any", "must_not_match")
+    @classmethod
+    def _valid_regexes(cls, patterns: list[str]) -> list[str]:
+        for pattern in patterns:
+            try:
+                re.compile(pattern)
+            except re.error as exc:
+                raise ValueError(f"invalid reply regex {pattern!r}: {exc}") from exc
+        return patterns
 
 
 class JudgeCheck(BaseModel):
@@ -84,11 +95,11 @@ class Expectation(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     route: Route | None = None
-    must_call: list[MustCall] = []
-    must_not_call: list[str] = []
+    must_call: list[MustCall] = Field(default_factory=list)
+    must_not_call: list[str] = Field(default_factory=list)
     db: DbExpectation | None = None
     reply: ReplyExpectation | None = None
-    judge: list[JudgeCheck] = []
+    judge: list[JudgeCheck] = Field(default_factory=list)
 
 
 class EvalCase(BaseModel):
@@ -103,7 +114,7 @@ class EvalCase(BaseModel):
     now: str
     seed: Seed
     expect: Expectation
-    meta: dict[str, Any] = {}
+    meta: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def _check_critical(self) -> EvalCase:

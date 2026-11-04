@@ -10,6 +10,7 @@ verdict. A judge check never decides a safety or rule violation.
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
 from typing import Any
@@ -84,8 +85,6 @@ def grade(case: EvalCase, result: RunResult) -> Grade:
 
 def parse_judge_response(text: str) -> JudgeVerdict:
     """Parse strict judge JSON `{"pass": bool, "reason": str}`."""
-    import json
-
     cleaned = text.strip()
     if cleaned.startswith("```"):
         cleaned = cleaned.strip("`")
@@ -95,9 +94,16 @@ def parse_judge_response(text: str) -> JudgeVerdict:
         parsed = json.loads(cleaned)
     except (json.JSONDecodeError, ValueError):
         return JudgeVerdict(False, "judge returned unparsable output")
-    if not isinstance(parsed, dict) or not isinstance(parsed.get("pass"), bool):
-        return JudgeVerdict(False, "judge output missing a boolean 'pass'")
-    return JudgeVerdict(bool(parsed["pass"]), str(parsed.get("reason", "")))
+    if (
+        not isinstance(parsed, dict)
+        or set(parsed) != {"pass", "reason"}
+        or not isinstance(parsed["pass"], bool)
+        or not isinstance(parsed["reason"], str)
+    ):
+        return JudgeVerdict(
+            False, "judge output must contain only boolean 'pass' and string 'reason'"
+        )
+    return JudgeVerdict(parsed["pass"], parsed["reason"])
 
 
 def _check_route(expected: str, result: RunResult) -> CheckResult:
@@ -133,8 +139,10 @@ def _check_db(expected: DbExpectation, result: RunResult) -> CheckResult:
         want = getattr(expected, field_name)
         if want is None:
             continue
-        rows = result.db_diff.get(table, [])
-        got = len(rows) if isinstance(rows, list) else 0
+        rows = result.db_diff.get(table)
+        if not isinstance(rows, list):
+            return CheckResult("db", False, f"missing database snapshot for {table}")
+        got = len(rows)
         if got != want:
             return CheckResult("db", False, f"expected {want} {table}, got {got}")
     return CheckResult("db", True)
