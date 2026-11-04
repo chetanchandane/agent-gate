@@ -1,0 +1,26 @@
+name: gate
+
+# Runs the regression gate on pull requests that change policy files.
+# The gate logic lands in milestone M8; this is the workflow skeleton.
+
+on:
+  pull_request:
+    paths:
+      - "policies/**"
+
+concurrency:
+  group: gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    # Skip for forks: they have no access to the ANTHROPIC_API_KEY secret.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    env:
+      MAX_SPEND_USD: "5"
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Placeholder
+        run: echo "Gate workflow is implemented in milestone M8."

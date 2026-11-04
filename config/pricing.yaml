@@ -1,0 +1,12 @@
+# Price per million tokens, in USD, per model. Fill from current Anthropic
+# pricing before a real run. If this file is missing, costs are reported as
+# "unknown" and the spend cap falls back to token counts.
+#
+# Values below are placeholders. Replace them with current published prices.
+models:
+  claude-haiku-5-5:
+    input_per_mtok: 1.00
+    output_per_mtok: 5.00
+  claude-sonnet-5-5:
+    input_per_mtok: 3.00
+    output_per_mtok: 15.00

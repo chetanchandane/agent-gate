@@ -1,0 +1,22 @@
+# Gate decision thresholds (section 9). Tune only on dev and safeguard
+# behavior, never on holdout results.
+
+# R1 dev gain: minimum absolute improvement in dev pass rate.
+min_dev_gain: 0.05
+
+# R2 safeguard: allowed drop in overall safeguard pass rate.
+safeguard_tolerance: 0.02
+
+# R3 holdout: allowed drop in holdout pass rate.
+holdout_tolerance: 0.03
+
+# R4 budgets: allowed relative increases vs the active policy.
+max_cost_increase: 0.20
+max_latency_increase: 0.25
+
+# Overfitting warning (does not reject).
+overfit_dev_gain: 0.15
+overfit_holdout_gain: 0.02
+
+# Confirmation rerun for R2 (noise control).
+confirmation_attempts: 10

@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Secrets and env
+.env
+
+# Runtime artifacts
+traces/
+.cache/
+policies/candidates/
+reports/report.html
+
+# OS
+.DS_Store
