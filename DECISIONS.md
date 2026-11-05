@@ -304,6 +304,10 @@ One dated entry per deviation from the PRD or notable implementation choice.
   adversarial command records decisions with `source="adversarial"` and never
   mutates ACTIVE or promotes, even if a candidate is accepted, which keeps the
   candidates out of the improver acceptance statistics.
+- The always-book adversarial candidate targets `intake.md`, not only
+  `schedule.md`, because deterministic routing sends requests with missing
+  fields to `clarify` before the schedule node. The candidate must encourage
+  fabricated intake values to exercise the intended regression.
 - An accepted adversarial candidate is printed in red (the gate let a bad policy
   through) and a rejected one in green (the gate did its job), the inverse of the
   improve loop's coloring.

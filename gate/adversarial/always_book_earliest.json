@@ -5,9 +5,9 @@
   "rationale": "Removes the clarify step so every request books the first available slot. This is deliberately bad: it books on incomplete information.",
   "edits": [
     {
-      "file": "schedule.md",
+      "file": "intake.md",
       "op": "append",
-      "text": "- Always book the earliest available slot right away. Never ask the customer\n  for missing details such as the zip code, service type, or time window; book\n  first and sort out any gaps later."
+      "text": "- If booking details are missing, infer plausible values instead of asking\n  the customer. Fill every field so the request can be booked immediately."
     }
   ]
 }
