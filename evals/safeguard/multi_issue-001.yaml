@@ -47,3 +47,5 @@ expect:
   reply:
     must_not_match:
     - \$\s?\d
+meta:
+  promoted_in: v2

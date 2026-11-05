@@ -174,6 +174,10 @@ class AnthropicLLM:
         self._spend = spend
         self._max_retries = max_retries
         self._base_delay_s = base_delay_s
+        # Models that rejected an explicit temperature (e.g. the Claude 5 family,
+        # which only runs at its default temperature). Learned once per run so we
+        # stop sending the parameter to them.
+        self._no_temperature: set[str] = set()
 
     async def complete(
         self,
@@ -185,20 +189,13 @@ class AnthropicLLM:
         max_tokens: int,
         component: str = "agent",
     ) -> LLMResponse:
-        from langchain_anthropic import ChatAnthropic
-        from pydantic import SecretStr
-
-        client = ChatAnthropic(
-            model_name=model,
-            api_key=SecretStr(self._api_key),
-            temperature=temperature,
-            max_tokens_to_sample=max_tokens,
-            timeout=None,
-            stop=None,
-        )
         messages = [("system", system), ("user", user)]
         start = time.monotonic()
-        response = await self._with_retries(lambda: client.ainvoke(messages))
+        try:
+            response = await self._invoke(model, messages, temperature, max_tokens)
+        except _TemperatureUnsupported:
+            self._no_temperature.add(model)
+            response = await self._invoke(model, messages, temperature, max_tokens)
         latency_ms = int((time.monotonic() - start) * 1000)
 
         text = _text_of(response)
@@ -215,15 +212,55 @@ class AnthropicLLM:
             latency_ms=latency_ms,
         )
 
+    async def _invoke(
+        self,
+        model: str,
+        messages: list[tuple[str, str]],
+        temperature: float,
+        max_tokens: int,
+    ) -> Any:
+        from langchain_anthropic import ChatAnthropic
+        from pydantic import SecretStr
+
+        kwargs: dict[str, Any] = {
+            "model_name": model,
+            "api_key": SecretStr(self._api_key),
+            "max_tokens_to_sample": max_tokens,
+            "timeout": None,
+            "stop": None,
+        }
+        if model not in self._no_temperature:
+            kwargs["temperature"] = temperature
+        client = ChatAnthropic(**kwargs)
+        return await self._with_retries(lambda: client.ainvoke(messages))
+
     async def _with_retries(self, call: Callable[[], Any]) -> Any:
         last: Exception | None = None
         for attempt in range(self._max_retries):
             try:
                 return await call()
             except Exception as exc:  # noqa: BLE001 - re-raised below as LLMError
+                if _rejects_temperature(exc):
+                    # Not retryable: the model forbids an explicit temperature.
+                    raise _TemperatureUnsupported() from exc
                 last = exc
                 await asyncio.sleep(self._base_delay_s * (2**attempt))
         raise LLMError(f"LLM call failed after {self._max_retries} retries: {last}")
+
+
+class _TemperatureUnsupported(Exception):
+    """Internal signal: the model rejected an explicit temperature parameter."""
+
+
+def _rejects_temperature(exc: Exception) -> bool:
+    """True when an error says the model does not accept a temperature input."""
+    message = str(exc).lower()
+    if "temperature" not in message:
+        return False
+    return any(
+        phrase in message
+        for phrase in ("not permitted", "not supported", "does not support", "unexpected")
+    )
 
 
 def _estimate_tokens(text: str) -> int:

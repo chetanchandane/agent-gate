@@ -1,0 +1,44 @@
+{
+  "candidate_id": "cand-0002",
+  "source": "improver",
+  "parent": "v2",
+  "decision": "rejected",
+  "failed_rules": [
+    "R1",
+    "R2"
+  ],
+  "rules": {
+    "R1": {
+      "passed": false,
+      "a": 0.9363636363636364,
+      "c": 0.9
+    },
+    "R2": {
+      "passed": false,
+      "regressed_cases": [
+        {
+          "id": "slot_conflict-002",
+          "a": "5/5",
+          "c": "3/5",
+          "confirmed": true
+        }
+      ],
+      "a": 0.9857142857142858,
+      "c": 0.9785714285714285
+    },
+    "R3": {
+      "passed": true,
+      "a": 0.95,
+      "c": 0.9800000000000001
+    },
+    "R4": {
+      "passed": true,
+      "cost_ratio": 1.083147101964642,
+      "p95_ratio": 1.0707746493193806,
+      "cost_known": true
+    }
+  },
+  "warnings": [],
+  "cost_usd": 6.583778999999983,
+  "created_at": "2026-11-05T17:37:06Z"
+}

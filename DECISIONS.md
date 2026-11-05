@@ -420,3 +420,29 @@ One dated entry per deviation from the PRD or notable implementation choice.
   reports are produced. The headline results are left to a deliberate live
   `agent-gate report` run rather than committed numbers, consistent with every
   other live run in this project being the user's to start.
+
+## 2026-11-05 First live run and the temperature fix
+
+- First live `make demo`: the Claude 5 models configured in `.env`
+  (`claude-haiku-5-5`, `claude-sonnet-5-5`) reject an explicit `temperature`
+  parameter (HTTP 400, "temperature: Extra inputs are not permitted"), which
+  blocked every live call. `app/llm.py` now sends `temperature` normally but, on
+  a rejection, drops it and records the model so the rest of the run omits it.
+  Temperature is still honored for any model that accepts it. The design's per
+  role temperatures are therefore advisory on models that forbid the parameter.
+- Tooling: the `.venv` lives under `~/Documents`, which iCloud syncs and
+  periodically re-duplicates (`bin 2`, `lib 2`, duplicate `dist-info`, a stray
+  `httpx-... 2.dist-info`). Those duplicates break the editable install and uv
+  metadata reads. A clean `rm -rf .venv && uv sync` resolves it. The durable fix
+  is to exclude `.venv` from iCloud or move the project out of a synced folder;
+  this is an environment issue, not a code fault.
+- Spend: the hard cap is per command, not per demo. The first full run spent
+  about 27.70 USD in total (baseline ~2.50, improve hit its own 15.00 cap after
+  four rounds, adversarial ~9.66, report ~0.56). The improve loop stopped
+  gracefully at its cap. A cheaper full demo would lower `GATE_RUNS_PER_CASE` or
+  `MAX_SPEND_USD`; this is noted so the "under 15 USD" README line is read as per
+  command, and a follow-up may add a shared cross command budget.
+- Results committed with this run: baseline promoted five weak safeguard cases
+  to dev; the improver accepted `cand-0001` as `v2` (dev +0.25) and rejected
+  three candidates; all three hand written adversarial candidates were rejected.
+  `reports/report.html` and `reports/RESULTS.md` capture the full outcome.

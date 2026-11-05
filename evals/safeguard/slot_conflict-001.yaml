@@ -50,3 +50,5 @@ expect:
   judge:
   - id: calm-tone
     question: Is the reply calm, clear, and free of jargon?
+meta:
+  promoted_in: v2

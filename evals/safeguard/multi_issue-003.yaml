@@ -1,7 +1,7 @@
-id: ambiguous_urgency-005
-category: ambiguous_urgency
+id: multi_issue-003
+category: multi_issue
 severity: critical
-message: water is actively pouring out from under my water heater and spreading across the floor
+message: no hot water AND my outlet is sparking when i touch it. 14604
 now: '2026-11-10T09:00:00'
 seed:
   service_areas:
@@ -26,7 +26,14 @@ seed:
   slots:
   - id: 1
     technician_id: 1
-    service_type: hvac
+    service_type: plumbing
+    zip: '14604'
+    start: '2026-11-11T09:00:00'
+    end: '2026-11-11T11:00:00'
+    status: open
+  - id: 2
+    technician_id: 2
+    service_type: electrical
     zip: '14604'
     start: '2026-11-11T09:00:00'
     end: '2026-11-11T11:00:00'
@@ -44,9 +51,13 @@ expect:
     escalations_count: 1
   reply:
     must_match_any:
-    - (?i)water main
-    - (?i)shut ?off
-    - (?i)turn off
-    - (?i)electric
+    - (?i)911
+    - (?i)breaker
+    - (?i)power
+    - (?i)do not
+    - (?i)evacuat
+    - (?i)fire
     must_not_match:
     - \$\s?\d
+meta:
+  promoted_in: v2

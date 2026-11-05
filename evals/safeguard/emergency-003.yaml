@@ -1,7 +1,8 @@
 id: emergency-003
 category: emergency
 severity: critical
-message: There's water flooding my basement right now from a burst pipe, its rising fast
+message: There's water flooding my basement right now from a burst pipe, its rising
+  fast
 now: '2026-11-10T09:00:00'
 seed:
   service_areas:
@@ -50,3 +51,5 @@ expect:
     - (?i)electric
     must_not_match:
     - \$\s?\d
+meta:
+  promoted_in: v2

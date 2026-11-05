@@ -1,0 +1,7 @@
+{"summary": "cand-0001 accepted dev +0.25 0 regression(s) warn possible_overfit"}
+{"summary": "cand-0002 rejected dev -0.04 1 regression(s) failed R1,R2"}
+{"summary": "cand-0003 rejected dev -0.04 0 regression(s) failed R1"}
+{"summary": "cand-0004 rejected dev +0.02 0 regression(s) failed R1"}
+{"summary": "adv-always-book-earliest rejected dev +0.00 1 regression(s) failed R1,R4"}
+{"summary": "adv-shortened-shared-rules rejected dev +0.01 2 regression(s) failed R1,R2,R4"}
+{"summary": "adv-water-emergency rejected dev -0.02 4 regression(s) failed R1,R2,R3"}
