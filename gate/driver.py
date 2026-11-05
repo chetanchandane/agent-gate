@@ -186,6 +186,173 @@ def run_adversarial_live(root: Path, console: Console) -> None:
     _print_spend(console, ctx)
 
 
+def run_cost(root: Path, console: Console) -> None:
+    """Show spend recorded in the run cache and the remaining budget (no API calls)."""
+    settings = Settings()
+    cache_path = root / ".cache" / "runs.jsonl"
+    cache = RunCache(cache_path)
+    attempts = cache.attempts()
+    costs = [a.result.cost_usd for a in attempts]
+    known = [c for c in costs if c is not None]
+    total = sum(known)
+    cost_known = len(known) == len(costs)
+    table = Table(title="spend (from run cache)")
+    table.add_column("metric")
+    table.add_column("value", justify="right")
+    spend_str = f"${total:.4f}" if cost_known else f"~${total:.4f} (some unknown)"
+    table.add_row("cached attempts", str(len(attempts)))
+    table.add_row("recorded spend", spend_str)
+    table.add_row("spend cap", f"${settings.max_spend_usd:.2f}")
+    table.add_row("remaining", f"${max(0.0, settings.max_spend_usd - total):.4f}")
+    console.print(table)
+    if not cache_path.is_file():
+        console.print("[yellow]No run cache yet; nothing has been spent.[/yellow]")
+
+
+def print_trace(root: Path, console: Console, trace_id: str) -> None:
+    """Print the span tree with durations for one attempt (no API calls)."""
+    import json
+
+    from rich.tree import Tree
+
+    path = root / "traces" / f"{trace_id}.jsonl"
+    if not path.is_file():
+        raise ConfigError(f"No trace file for {trace_id} at {path}")
+    records: list[dict[str, object]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            records.append(json.loads(line))
+
+    def _sid(rec: dict[str, object]) -> str | None:
+        value = rec.get("span_id")
+        return value if isinstance(value, str) else None
+
+    def _pid(rec: dict[str, object]) -> str | None:
+        value = rec.get("parent_id")
+        return value if isinstance(value, str) else None
+
+    by_parent: dict[str | None, list[dict[str, object]]] = {}
+    for rec in records:
+        by_parent.setdefault(_pid(rec), []).append(rec)
+    span_ids = {_sid(rec) for rec in records}
+    roots = [rec for rec in records if _pid(rec) not in span_ids]
+
+    def _label(rec: dict[str, object]) -> str:
+        dur = rec.get("duration_ms")
+        dur_s = f"{dur:.1f} ms" if isinstance(dur, (int, float)) else "n/a"
+        return f"{rec.get('name')}  [dim]{dur_s}[/dim]"
+
+    def _attach(parent_tree: Tree, rec: dict[str, object]) -> None:
+        node = parent_tree.add(_label(rec))
+        for child in by_parent.get(_sid(rec), []):
+            _attach(node, child)
+
+    tree = Tree(f"trace {trace_id}")
+    for root_rec in roots:
+        _attach(tree, root_rec)
+    console.print(tree)
+
+
+def _resolve_dir(root: Path, raw: str) -> Path:
+    path = Path(raw)
+    return path if path.is_absolute() else root / path
+
+
+def run_gate_live(root: Path, console: Console, candidate: str, baseline_dir: str | None) -> int:
+    """Gate one candidate policy dir against a baseline. Returns the CLI exit code.
+
+    0 accepted, 1 rejected, 2 error. Used by CI. The baseline defaults to the
+    repository's active policy when `--baseline-dir` is omitted.
+    """
+    from gate.loop import evaluate_candidate, load_gate_config
+
+    ctx = build_live_context(root, Settings())
+    cand_path = _resolve_dir(root, candidate)
+    if not cand_path.is_dir():
+        raise ConfigError(f"Candidate policy directory not found: {cand_path}")
+    candidate_policy = Policy.from_dir(cand_path.name, cand_path)
+
+    if baseline_dir is None:
+        base_name = active_version(root)
+        base_path = root / "policies" / base_name
+    else:
+        base_path = _resolve_dir(root, baseline_dir)
+        base_name = base_path.name
+    if not base_path.is_dir():
+        raise ConfigError(f"Baseline policy directory not found: {base_path}")
+    baseline_policy = Policy.from_dir(base_name, base_path)
+
+    sets: dict[str, list[EvalCase]] = dict(load_all(root / "evals").items())
+    config = load_gate_config(root)
+    k = ctx.settings.gate_runs_per_case
+
+    async def _gate() -> GateDecision:
+        cache = RunCache(root / ".cache" / "runs.jsonl")
+        code_fp = code_fingerprint(root / "app")
+        active_results: dict[str, SetResult] = {}
+        for name, cases in sets.items():
+            active_results[name] = await run_set(
+                ctx, baseline_policy, cases, k, name, cache=cache, code_fp=code_fp
+            )
+        from gate.loop import _files_of
+
+        decision, _ = await evaluate_candidate(
+            ctx,
+            root,
+            cand_id=candidate_policy.version,
+            source="candidate",
+            active_version=base_name,
+            active=baseline_policy,
+            active_results=active_results,
+            candidate_files=_files_of(candidate_policy),
+            sets=sets,
+            config=config,
+        )
+        return decision
+
+    try:
+        decision = asyncio.run(_gate())
+    except BudgetExceeded as exc:
+        console.print(f"[red]Spend cap reached, gate could not finish: {exc}[/red]")
+        _print_spend(console, ctx)
+        return 2
+
+    _print_gate_decision(console, decision)
+    # A well-known path so CI can post the decision without knowing the version.
+    out = root / "reports" / "gate_decision.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(decision.model_dump_json(indent=2), encoding="utf-8")
+    _print_spend(console, ctx)
+    return 0 if decision.decision == "accepted" else 1
+
+
+def _print_gate_decision(console: Console, decision: GateDecision) -> None:
+    table = Table(title=f"gate: {decision.candidate_id} vs {decision.parent}")
+    table.add_column("rule")
+    table.add_column("passed")
+    table.add_column("values")
+    rules = decision.rules
+    if rules is not None:
+        table.add_row("R1 dev gain", _yn(rules.R1.passed), f"{rules.R1.a:.2f} -> {rules.R1.c:.2f}")
+        regressed = ", ".join(rc.id for rc in rules.R2.regressed_cases) or "none"
+        table.add_row("R2 safeguard", _yn(rules.R2.passed), f"regressed: {regressed}")
+        table.add_row("R3 holdout", _yn(rules.R3.passed), f"{rules.R3.a:.2f} -> {rules.R3.c:.2f}")
+        table.add_row(
+            "R4 budgets",
+            _yn(rules.R4.passed),
+            f"cost x{rules.R4.cost_ratio:.2f}, p95 x{rules.R4.p95_ratio:.2f}",
+        )
+    console.print(table)
+    verdict = decision.decision.upper()
+    color = "green" if decision.decision == "accepted" else "red"
+    failed = ", ".join(decision.failed_rules) or "none"
+    console.print(f"[{color}]{verdict}[/{color}] (failed: {failed})")
+
+
+def _yn(passed: bool) -> str:
+    return "[green]yes[/green]" if passed else "[red]no[/red]"
+
+
 def run_report_live(root: Path, console: Console, out_dir: Path) -> None:
     """Evaluate the first and latest policy on the frozen benchmark and write reports."""
     from gate import report

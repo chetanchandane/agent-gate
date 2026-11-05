@@ -1,4 +1,8 @@
-.PHONY: install check validate baseline improve adversarial report demo
+.PHONY: install check validate baseline improve adversarial report cost demo
+
+# agent-gate is invoked with --no-sync so a transient re-sync never drops the
+# editable install mid-run (see the M5 note in DECISIONS.md).
+AGENT_GATE = uv run --no-sync agent-gate
 
 install:
 	uv sync
@@ -10,19 +14,23 @@ check:
 	uv run pytest --cov -m "not live"
 
 validate:
-	uv run agent-gate validate
+	$(AGENT_GATE) validate
 
 baseline:
-	uv run agent-gate baseline
+	$(AGENT_GATE) baseline
 
 improve:
-	uv run agent-gate improve --rounds 6
+	$(AGENT_GATE) improve --rounds 6
 
 adversarial:
-	uv run agent-gate adversarial
+	$(AGENT_GATE) adversarial
 
 report:
-	uv run agent-gate report
+	$(AGENT_GATE) report
 
-demo: validate baseline improve adversarial report
-	uv run agent-gate cost
+cost:
+	$(AGENT_GATE) cost
+
+# The full demo from a clean clone. validate is offline; the rest need
+# ANTHROPIC_API_KEY and spend against the cap. See docs/DEMO.md.
+demo: install validate baseline improve adversarial report cost

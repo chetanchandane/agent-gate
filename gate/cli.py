@@ -22,9 +22,6 @@ app = typer.Typer(
     add_completion=False,
 )
 
-_NOT_YET = "This command is not implemented yet. It lands in a later milestone."
-
-
 @app.command()
 def validate() -> None:
     """Validate every case file, policy directory, and config file."""
@@ -58,7 +55,17 @@ def run(
 @app.command()
 def gate(candidate: str, baseline_dir: str | None = None) -> None:
     """Evaluate one candidate directory against a baseline (used by CI)."""
-    raise typer.Exit(_fail())
+    from rich.console import Console
+
+    from app.errors import AgentGateError
+    from gate import driver
+
+    try:
+        code = driver.run_gate_live(Path.cwd(), Console(), candidate, baseline_dir)
+    except AgentGateError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+    raise typer.Exit(code)
 
 
 @app.command()
@@ -120,18 +127,25 @@ def report(out: str = "reports/") -> None:
 @app.command()
 def trace(trace_id: str) -> None:
     """Print a span tree with durations for one attempt."""
-    raise typer.Exit(_fail())
+    from rich.console import Console
+
+    from gate import driver
+
+    try:
+        driver.print_trace(Path.cwd(), Console(), trace_id)
+    except ConfigError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
 
 
 @app.command()
 def cost() -> None:
     """Show total spend so far and the remaining budget."""
-    raise typer.Exit(_fail())
+    from rich.console import Console
 
+    from gate import driver
 
-def _fail() -> int:
-    typer.echo(_NOT_YET, err=True)
-    return 1
+    driver.run_cost(Path.cwd(), Console())
 
 
 def _validate_repository(root: Path) -> None:

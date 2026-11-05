@@ -5,18 +5,43 @@ edits to versioned policy files, and a deterministic gate accepts an edit only
 when it improves a dev set, breaks nothing in a protected safeguard set, and
 holds on a hidden holdout set.
 
-> Status: scaffold (M0). The headline results table, demo video link, loop
-> diagram, and rejected-candidates table land as later milestones complete.
+The full pipeline is implemented: domain agent, eval sets, graders, runner,
+metrics, cache, the acceptance gate, the improver loop, hand written adversarial
+candidates, reports, and CI. Everything except the live LLM runs is exercised
+offline (`make check`). The headline numbers below are produced by a live
+`agent-gate report` run, which needs an API key and spends against the cap, so
+they are generated deliberately rather than committed.
 
 ## Quickstart
 
 ```bash
-make install          # uv sync (creates .venv, installs deps)
+make install           # uv sync (creates .venv, installs deps)
 cp .env.example .env   # then set ANTHROPIC_API_KEY
-make check             # ruff, mypy, offline pytest
+make check             # ruff, mypy, offline pytest (no API key needed)
 ```
 
-Expected cost for a full demo run is under 15 USD (enforced by a hard cap).
+Then, to produce results (uses the API, under 15 USD, enforced by a hard cap):
+
+```bash
+make demo              # validate, baseline, improve, adversarial, report, cost
+```
+
+`make demo` writes `reports/RESULTS.md` (paste ready) and `reports/report.html`
+(static, opens offline). See `docs/DEMO.md` for the 90 second walkthrough.
+
+## Commands
+
+| Command | What it does |
+| --- | --- |
+| `agent-gate validate` | Validate every case file, policy dir, and config. No API calls |
+| `agent-gate run --policy v1 --set dev [--k 3] [--case ID]` | Run one set, print a summary |
+| `agent-gate baseline` | Run `v1` on all sets with `k = 5`, flag weak safeguard cases |
+| `agent-gate improve --rounds 6 [--git-commit]` | The main loop: propose, guard, run, gate, accept or reject, promote |
+| `agent-gate gate --candidate PATH [--baseline-dir PATH]` | Gate one candidate dir against a baseline. Exit 0 accepted, 1 rejected, 2 error. Used by CI |
+| `agent-gate adversarial` | Run the hand written adversarial candidates through the gate |
+| `agent-gate report [--out reports/]` | Evaluate first and latest policy on the frozen benchmark, write the reports |
+| `agent-gate trace TRACE_ID` | Print the span tree with durations for one attempt |
+| `agent-gate cost` | Show spend recorded in the run cache and the remaining budget |
 
 ## How the gate decides
 
@@ -50,6 +75,29 @@ config/   # gate.yaml, pricing.yaml
 reports/  # decisions, history, RESULTS.md, report.html
 docs/     # PRD.md
 ```
+
+## Continuous integration
+
+- `ci.yml` runs on every push and pull request: `uv sync`, `ruff check`,
+  `ruff format --check`, `mypy`, offline `pytest`, and `agent-gate validate`.
+  It never needs an API key.
+- `gate.yml` runs on pull requests that change `policies/**`. It checks out the
+  base branch, runs `agent-gate gate` on the PR's candidate policy against the
+  base policy with `MAX_SPEND_USD=5`, posts the R1 to R4 decision table as a PR
+  comment (updated on reruns), and fails the job if the candidate is rejected.
+  It is skipped for forks, which cannot read the API key secret.
+
+## Reports
+
+`agent-gate report` writes two files from the frozen benchmark
+(`evals/benchmark.lock.yaml`):
+
+- `reports/RESULTS.md`, paste ready for this README.
+- `reports/report.html`, a single static file with no JavaScript framework.
+
+Both contain the first vs latest headline, version history, the rejected
+candidates table, per category pass rates, cost and latency, flaky cases, and
+the limitations below.
 
 ## Limitations
 

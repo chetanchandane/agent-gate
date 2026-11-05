@@ -372,3 +372,40 @@ One dated entry per deviation from the PRD or notable implementation choice.
 - Spend component attribution was previously empty. LLM calls now record agent,
   judge, and improver costs in the shared spend tracker, and reports render the
   recorded component totals.
+
+## 2026-11-05 M8 CI gate, CLI completion, README, demo
+
+- The `agent-gate gate` command is the CI entry point. It loads a candidate
+  policy directory and a baseline directory (the baseline defaults to the
+  repository's active policy), runs both on all three sets, and reuses
+  `loop.evaluate_candidate` so a manual candidate goes through the exact same
+  gate path (policy guard, R1 to R4, R2 confirmation reruns) as the improve
+  loop, recorded with `source="candidate"`. Exit codes follow the PRD: 0
+  accepted, 1 rejected, 2 error (bad input or spend cap). The baseline run and
+  the candidate evaluation share one event loop so the concurrency-safe spend
+  tracker stays valid, the same invariant kept in M3 and M7.
+- The gate command writes its decision to a well-known `reports/gate_decision.json`
+  in addition to the per-candidate record, so `gate.yml` can post the decision
+  without knowing the resulting version name.
+- `gate.yml` now runs the live gate on pull requests that change `policies/**`:
+  it checks out the base branch, derives the candidate and baseline versions from
+  each side's `policies/ACTIVE`, runs `agent-gate gate` with `MAX_SPEND_USD=5`,
+  posts or updates a single PR comment with the R1 to R4 table via
+  `actions/github-script`, and fails the job on a non-zero exit. It is skipped
+  for forks, which cannot read the API key secret, preserving the M0 boundary
+  that untrusted PR code never runs with a secret.
+- `agent-gate cost` reads the run cache rather than any live state: it sums the
+  recorded per-attempt cost, shows the cap and the remaining budget, and marks
+  the total as approximate when any attempt had unknown pricing. This needs no
+  API key, matching the PRD cost-discipline use of checking spend before a run.
+- `agent-gate trace TRACE_ID` reads `traces/<TRACE_ID>.jsonl` and prints the span
+  tree with per-span durations using a `rich` tree, reconstructed from each
+  span's `parent_id`. No API key needed.
+- The Makefile invokes `agent-gate` through `uv run --no-sync` so the transient
+  editable-install drop recorded in the M5 note cannot break a demo mid-run, and
+  `make demo` depends on `install` so it works from a clean clone. The 90 second
+  demo script lives in `docs/DEMO.md`.
+- The README now documents the full command set, the CI workflows, and how the
+  reports are produced. The headline results are left to a deliberate live
+  `agent-gate report` run rather than committed numbers, consistent with every
+  other live run in this project being the user's to start.

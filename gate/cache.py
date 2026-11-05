@@ -72,6 +72,10 @@ class RunCache:
     def __len__(self) -> int:
         return len(self._entries)
 
+    def attempts(self) -> list[ScoredAttempt]:
+        """Every cached scored attempt (used by `agent-gate cost`)."""
+        return list(self._entries.values())
+
     def _load(self) -> None:
         if not self._path.is_file():
             return
