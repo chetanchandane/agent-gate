@@ -174,3 +174,44 @@ One dated entry per deviation from the PRD or notable implementation choice.
   case definition. This prevents stale grades after judge configuration or case
   expectations change. Baseline sets run on one event loop so the shared,
   concurrency-safe spend tracker remains valid across all three sets.
+
+## 2026-11-04 M4 gate
+
+- `gate/gate.py` is pure (no network, file writes, or clock reads): every rule
+  is a function of two `SetResult` bundles (active A and candidate C) plus the
+  thresholds. The `created_at` timestamp and the R2 confirmation reruns are
+  passed in by the caller rather than produced inside the module, so the gate is
+  fully unit-testable with synthetic `SetResult`s.
+- The R2 confirmation step reruns flagged cases, which is impure LLM work and
+  therefore cannot live in the pure gate. The gate expresses the decision as a
+  pure helper `confirmation_stands(a_failures, c_failures, severity)` and takes
+  an optional `confirm` callback that supplies the rerun failure counts. When no
+  callback is given, every flag is treated as confirmed (the conservative
+  default), so a gate run without reruns never silently clears a regression. The
+  live `improve` loop (M5) injects the real rerun callback.
+- R2 needs each safeguard case's severity (critical cases regress on any drop,
+  normal cases on a drop of two or more attempts), which `SetResult` does not
+  carry. The gate takes a `severities` mapping of case id to severity instead of
+  importing or re-reading the case files, keeping it pure and decoupled.
+- R4 budgets are measured over the combined dev and safeguard attempts. Mean
+  cost per attempt is the summed cost over the summed attempts of both sets; p95
+  latency is recomputed from every attempt's `latency_ms` across both sets using
+  the same percentile helper as the metrics module. When pricing is unknown
+  (no pricing file) the cost budget is treated as satisfied and `cost_known` is
+  recorded as false, so the decision shows the gap honestly rather than
+  rejecting on a missing input.
+- `GateConfig` is a Pydantic model with a `from_mapping` constructor. The gate
+  does not read `config/gate.yaml` itself (that is a file read best kept in the
+  impure CLI or driver layer); the caller parses the YAML and passes a mapping.
+- `GateDecision` mirrors the PRD JSON record (candidate id, source, parent,
+  decision, failed rules, per-rule results, warnings, cost, created_at) and adds
+  a `summary_line()` for `reports/history.jsonl`. Writing the decision file, the
+  history append, and the accept/reject promotion side effects are orchestration
+  and land with the `improve` command in M5; M4 delivers only the pure decision.
+- Table-driven tests in `tests/test_gate.py` cover R1 (gain, no-gain, equal,
+  regression, exact-threshold), R2 (critical any-drop, normal one-drop tolerated,
+  normal two-drop regressed, rate floor without per-case regression), the
+  confirmation step (`noise_cleared` and a flag that stands, plus the margin
+  table for both severities), R3 (single-case and small-drop-within-tolerance),
+  R4 (within budget, cost over, latency over, unknown cost), the overfit warning,
+  and `decide` end to end (clean accept, guard short-circuit, R1 rejection).
