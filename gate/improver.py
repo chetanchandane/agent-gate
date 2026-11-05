@@ -131,6 +131,7 @@ async def _complete(ctx: RunContext, system: str, user: str) -> str:
         model=ctx.settings.improver_model,
         temperature=ctx.settings.improver_temperature,
         max_tokens=4000,
+        component="improver",
     )
     return result.text
 

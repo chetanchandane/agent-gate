@@ -191,9 +191,7 @@ def build_rejected(decisions: list[GateDecision]) -> list[RejectedRow]:
     for d in decisions:
         if d.decision != "rejected":
             continue
-        regressed = (
-            [rc.id for rc in d.rules.R2.regressed_cases if rc.confirmed] if d.rules else []
-        )
+        regressed = [rc.id for rc in d.rules.R2.regressed_cases if rc.confirmed] if d.rules else []
         rows.append(
             RejectedRow(
                 candidate_id=d.candidate_id,

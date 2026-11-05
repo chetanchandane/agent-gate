@@ -10,7 +10,7 @@ from rich.console import Console
 
 from app.errors import ConfigError
 from app.settings import Settings
-from evals.schema import EvalCase
+from evals.schema import EvalCase, load_all
 from gate import driver
 from gate.metrics import SetResult
 from tests.conftest import load_v1, make_context
@@ -40,6 +40,17 @@ def test_active_version_and_load_policy_against_repo() -> None:
     assert driver.active_version(root) == "v1"
     policy = driver.load_policy(root, "v1")
     assert policy.version == "v1"
+
+
+def test_load_benchmark_sets_resolves_locked_ids() -> None:
+    root = Path(__file__).parents[1]
+    current = load_all(root / "evals")
+    benchmark = driver.load_benchmark_sets(root, current)
+    assert {name: len(cases) for name, cases in benchmark.items()} == {
+        "dev": 30,
+        "safeguard": 20,
+        "holdout": 20,
+    }
 
 
 def test_active_version_missing_raises(tmp_path: Path) -> None:

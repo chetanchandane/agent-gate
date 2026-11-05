@@ -165,6 +165,11 @@ def _validate_repository(root: Path) -> None:
 
     _validate_cases(root)
     _validate_active_policy(root)
+    from gate.driver import load_benchmark_sets
+
+    load_benchmark_sets(
+        root, {str(name): cases for name, cases in load_all(root / "evals").items()}
+    )
 
 
 def _validate_cases(root: Path) -> None:

@@ -79,13 +79,16 @@ class SpendTracker:
         self.total_cost_usd = 0.0
         self.total_tokens_in = 0
         self.total_tokens_out = 0
+        self.component_costs: dict[str, float] = {}
         self.cost_known = pricing is not None
 
     @property
     def remaining_usd(self) -> float:
         return max(0.0, self._max - self.total_cost_usd)
 
-    async def record(self, model: str, tokens_in: int, tokens_out: int) -> float | None:
+    async def record(
+        self, model: str, tokens_in: int, tokens_out: int, component: str = "agent"
+    ) -> float | None:
         """Add one call's usage and raise BudgetExceeded if the cap is passed."""
         async with self._lock:
             self.total_tokens_in += tokens_in
@@ -93,10 +96,11 @@ class SpendTracker:
             cost = self._pricing.cost(model, tokens_in, tokens_out) if self._pricing else None
             if cost is None:
                 self.cost_known = False
-                estimate = (tokens_in + tokens_out) * _FALLBACK_USD_PER_MTOK / 1_000_000
-                self.total_cost_usd += estimate
+                amount = (tokens_in + tokens_out) * _FALLBACK_USD_PER_MTOK / 1_000_000
             else:
-                self.total_cost_usd += cost
+                amount = cost
+            self.total_cost_usd += amount
+            self.component_costs[component] = self.component_costs.get(component, 0.0) + amount
             if self.total_cost_usd > self._max:
                 raise BudgetExceeded(
                     f"spend {self.total_cost_usd:.4f} USD passed cap {self._max:.2f} USD"
@@ -115,6 +119,7 @@ class LLMClient(Protocol):
         model: str,
         temperature: float,
         max_tokens: int,
+        component: str = "agent",
     ) -> LLMResponse: ...
 
 
@@ -137,11 +142,12 @@ class FakeLLM:
         model: str,
         temperature: float,
         max_tokens: int,
+        component: str = "agent",
     ) -> LLMResponse:
         text = self._responder(system, user)
         tokens_in = _estimate_tokens(system) + _estimate_tokens(user)
         tokens_out = _estimate_tokens(text)
-        cost = await self._spend.record(model, tokens_in, tokens_out)
+        cost = await self._spend.record(model, tokens_in, tokens_out, component)
         return LLMResponse(
             text=text,
             model=model,
@@ -177,6 +183,7 @@ class AnthropicLLM:
         model: str,
         temperature: float,
         max_tokens: int,
+        component: str = "agent",
     ) -> LLMResponse:
         from langchain_anthropic import ChatAnthropic
         from pydantic import SecretStr
@@ -198,7 +205,7 @@ class AnthropicLLM:
         usage = getattr(response, "usage_metadata", None) or {}
         tokens_in = int(usage.get("input_tokens", 0))
         tokens_out = int(usage.get("output_tokens", 0))
-        cost = await self._spend.record(model, tokens_in, tokens_out)
+        cost = await self._spend.record(model, tokens_in, tokens_out, component)
         return LLMResponse(
             text=text,
             model=model,

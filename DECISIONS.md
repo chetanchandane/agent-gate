@@ -357,3 +357,18 @@ One dated entry per deviation from the PRD or notable implementation choice.
   `tests/test_report.py` from fixture `SetResult`s and a fixture rejected
   decision, which assert all seven sections, the inline SVG bars, the single
   file no framework HTML, and graceful empty rejected and flaky tables.
+
+## 2026-11-05 M7 review fixes
+
+- The report previously evaluated the current eval directories instead of a
+  frozen benchmark. Added `evals/benchmark.lock.yaml` and made reporting and
+  repository validation resolve cases through that lock, with duplicate and
+  missing-id checks.
+- The report previously evaluated first and latest policies through separate
+  event loops while reusing one spend tracker. Both evaluations now run on one
+  event loop, preserving the async-lock invariant established in M3.
+- Unknown-cost attempts were included as zero in version mean-cost output.
+  Version cost now renders as unknown unless every attempt has known pricing.
+- Spend component attribution was previously empty. LLM calls now record agent,
+  judge, and improver costs in the shared spend tracker, and reports render the
+  recorded component totals.

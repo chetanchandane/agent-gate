@@ -48,10 +48,22 @@ class _CountingLLM:
         self.cost_known = True
 
     async def complete(
-        self, *, system: str, user: str, model: str, temperature: float, max_tokens: int
+        self,
+        *,
+        system: str,
+        user: str,
+        model: str,
+        temperature: float,
+        max_tokens: int,
+        component: str = "agent",
     ) -> LLMResponse:
         response = await self._inner.complete(
-            system=system, user=user, model=model, temperature=temperature, max_tokens=max_tokens
+            system=system,
+            user=user,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            component=component,
         )
         self.tokens_in += response.tokens_in
         self.tokens_out += response.tokens_out
@@ -228,6 +240,7 @@ async def _run_judge(ctx: RunContext, check: JudgeCheck, reply: str) -> JudgeVer
         model=ctx.settings.judge_model,
         temperature=ctx.settings.judge_temperature,
         max_tokens=ctx.settings.max_tokens,
+        component="judge",
     )
     return parse_judge_response(response.text)
 

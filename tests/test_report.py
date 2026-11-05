@@ -7,6 +7,7 @@ from pathlib import Path
 from app.runner_types import RunResult
 from app.state import AgentState
 from gate import report
+from gate.driver import _mean_cost
 from gate.gate import GateDecision, GateRules, R1Result, R2Result, R3Result, R4Result, RegressedCase
 from gate.metrics import ScoredAttempt, SetResult
 
@@ -94,12 +95,26 @@ def _data() -> report.ReportData:
         decisions=[_rejected_decision()],
         versions=[
             report.VersionRow(
-                version="v1", source="human", dev=0.6, safeguard=0.6, holdout=0.8,
-                mean_cost_usd=0.001, p95_latency_ms=105, decision="superseded", reason="baseline",
+                version="v1",
+                source="human",
+                dev=0.6,
+                safeguard=0.6,
+                holdout=0.8,
+                mean_cost_usd=0.001,
+                p95_latency_ms=105,
+                decision="superseded",
+                reason="baseline",
             ),
             report.VersionRow(
-                version="v2", source="improver", dev=0.9, safeguard=1.0, holdout=1.0,
-                mean_cost_usd=0.001, p95_latency_ms=104, decision="active", reason="fixed clarify",
+                version="v2",
+                source="improver",
+                dev=0.9,
+                safeguard=1.0,
+                holdout=1.0,
+                mean_cost_usd=0.001,
+                p95_latency_ms=104,
+                decision="active",
+                reason="fixed clarify",
             ),
         ],
         cost=report.CostLatency(
@@ -121,6 +136,12 @@ def test_build_categories_before_and_after() -> None:
     rows = report.build_categories(_first(), _latest(), _CATEGORIES)
     amb = next(r for r in rows if r.category == "ambiguity")
     assert amb.before < amb.after  # 1/5 -> 4/5
+
+
+def test_unknown_cost_is_not_averaged_as_zero() -> None:
+    results = _first()
+    results["dev"].scored[0].result.cost_usd = None
+    assert _mean_cost(results) is None
 
 
 def test_build_rejected_lists_confirmed_regressions() -> None:

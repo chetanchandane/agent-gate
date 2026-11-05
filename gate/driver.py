@@ -10,9 +10,11 @@ the real work; this module only orchestrates and renders.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 
+import yaml
 from rich.console import Console
 from rich.table import Table
 
@@ -189,17 +191,23 @@ def run_report_live(root: Path, console: Console, out_dir: Path) -> None:
     from gate import report
 
     ctx = build_live_context(root, Settings())
-    sets: dict[str, list[EvalCase]] = dict(load_all(root / "evals").items())
+    current_sets: dict[str, list[EvalCase]] = dict(load_all(root / "evals").items())
+    sets = load_benchmark_sets(root, current_sets)
     first_version = "v1"
     latest_version = active_version(root)
     k = ctx.settings.gate_runs_per_case
 
     first_policy = load_policy(root, first_version)
-    first = evaluate_baseline_quiet(ctx, root, first_policy, sets, k)
-    if latest_version == first_version:
-        latest = first
-    else:
-        latest = evaluate_baseline_quiet(ctx, root, load_policy(root, latest_version), sets, k)
+    first, latest = asyncio.run(
+        evaluate_report_policies(
+            ctx,
+            root,
+            first_policy,
+            load_policy(root, latest_version) if latest_version != first_version else first_policy,
+            sets,
+            k,
+        )
+    )
 
     data = report.build_report_data(
         generated_at=_now_iso(),
@@ -219,14 +227,49 @@ def run_report_live(root: Path, console: Console, out_dir: Path) -> None:
     _print_spend(console, ctx)
 
 
-def evaluate_baseline_quiet(
-    ctx: RunContext, root: Path, policy: Policy, sets: dict[str, list[EvalCase]], k: int
-) -> dict[str, SetResult]:
-    """Run every set under one policy without printing or promoting (frozen benchmark)."""
+def load_benchmark_sets(
+    root: Path, current_sets: Mapping[str, list[EvalCase]]
+) -> dict[str, list[EvalCase]]:
+    """Load the immutable benchmark membership and resolve current case files."""
+    path = root / "evals" / "benchmark.lock.yaml"
+    try:
+        locked = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError) as exc:
+        raise ConfigError(f"Cannot read benchmark lock {path}: {exc}") from exc
+    if not isinstance(locked, dict):
+        raise ConfigError(f"Benchmark lock {path} must be a mapping")
+    by_id = {case.id: case for cases in current_sets.values() for case in cases}
+    benchmark: dict[str, list[EvalCase]] = {}
+    for name in ("dev", "safeguard", "holdout"):
+        ids = locked.get(name)
+        if not isinstance(ids, list) or not all(isinstance(case_id, str) for case_id in ids):
+            raise ConfigError(f"Benchmark lock {path} has invalid {name} ids")
+        try:
+            benchmark[name] = [by_id[case_id] for case_id in ids]
+        except KeyError as exc:
+            raise ConfigError(f"Benchmark lock references missing case {exc.args[0]}") from exc
+    locked_ids = [case.id for cases in benchmark.values() for case in cases]
+    if len(locked_ids) != len(set(locked_ids)):
+        raise ConfigError(f"Benchmark lock {path} contains duplicate case ids")
+    return benchmark
+
+
+async def evaluate_report_policies(
+    ctx: RunContext,
+    root: Path,
+    first_policy: Policy,
+    latest_policy: Policy,
+    sets: dict[str, list[EvalCase]],
+    k: int,
+) -> tuple[dict[str, SetResult], dict[str, SetResult]]:
+    """Evaluate first and latest policies on one event loop without promotion."""
     cache = RunCache(root / ".cache" / "runs.jsonl")
     code_fp = code_fingerprint(root / "app")
-    results, _ = asyncio.run(_run_baseline_sets(ctx, policy, sets, k, cache, code_fp))
-    return results
+    first, _ = await _run_baseline_sets(ctx, first_policy, sets, k, cache, code_fp)
+    if latest_policy.content_hash == first_policy.content_hash:
+        return first, first
+    latest, _ = await _run_baseline_sets(ctx, latest_policy, sets, k, cache, code_fp)
+    return first, latest
 
 
 def category_map(sets: dict[str, list[EvalCase]]) -> dict[str, str]:
@@ -252,8 +295,6 @@ def build_version_rows(
     latest_version: str,
 ) -> list[VersionRow]:
     """Build the version history from policy manifests, filling benchmark numbers."""
-    import yaml as _yaml
-
     rows: list[VersionRow] = []
     version_dirs = sorted(
         (p for p in (root / "policies").glob("v*") if p.is_dir()),
@@ -263,7 +304,7 @@ def build_version_rows(
         manifest: dict[str, object] = {}
         manifest_path = vdir / "manifest.yaml"
         if manifest_path.is_file():
-            manifest = _yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
+            manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
         version = vdir.name
         if version == first_version:
             results: dict[str, SetResult] | None = first
@@ -306,10 +347,15 @@ def build_cost_latency(
         p95 = _p95_latency(results)
         if p50 is not None and p95 is not None:
             per_version.append(VersionLatency(version=version, p50_ms=p50, p95_ms=p95))
+    from gate.report import CostComponent
+
     return CostLatency(
         total_usd=ctx.spend.total_cost_usd,
         cost_known=ctx.spend.cost_known,
-        components=[],
+        components=[
+            CostComponent(name=name, cost_usd=amount)
+            for name, amount in sorted(ctx.spend.component_costs.items())
+        ],
         per_version_latency=per_version,
     )
 
@@ -325,7 +371,7 @@ def _mean_cost(results: dict[str, SetResult] | None) -> float | None:
         return None
     attempts = [a for r in results.values() for a in r.scored]
     known = [a.result.cost_usd for a in attempts if a.result.cost_usd is not None]
-    if not known or not attempts:
+    if not attempts or len(known) != len(attempts):
         return None
     return sum(known) / len(attempts)
 
