@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
+import pytest
 import yaml
 
 from app.runner_types import RunResult
@@ -31,6 +33,11 @@ def _set(name: str, cases: dict[str, int], k: int) -> SetResult:
 def test_next_version_increments() -> None:
     assert loop._next_version("v1") == "v2"
     assert loop._next_version("v9") == "v10"
+
+
+def test_run_improve_rejects_non_positive_rounds() -> None:
+    with pytest.raises(ValueError, match="rounds must be at least 1"):
+        asyncio.run(loop.run_improve(None, Path("."), None, 0))  # type: ignore[arg-type]
 
 
 def test_load_gate_config_reads_repo_defaults() -> None:

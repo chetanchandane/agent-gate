@@ -15,8 +15,7 @@ import re
 
 from pydantic import BaseModel
 
-_WORD = re.compile(r"\S+")
-_WS = re.compile(r"\s+")
+_WORD = re.compile(r"[a-z0-9]+(?:['’][a-z0-9]+)?")
 
 
 class GuardLimits(BaseModel):
@@ -29,7 +28,7 @@ class GuardLimits(BaseModel):
 
 
 def _normalize(text: str) -> str:
-    return _WS.sub(" ", text).strip().lower()
+    return " ".join(_WORD.findall(text.lower()))
 
 
 def _file_too_long(files: dict[str, str], limits: GuardLimits) -> str | None:

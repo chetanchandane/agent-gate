@@ -75,6 +75,21 @@ def test_memorized_case_text_rejected() -> None:
     assert reason == "memorized_case_text"
 
 
+def test_memorized_case_text_normalizes_punctuation() -> None:
+    message = "my water heater is leaking, all over the basement floor right now"
+    cand = _candidate()
+    cand["shared_rules.md"] += "\nmy water heater is leaking all over the basement floor right now"
+    assert (
+        check_candidate(
+            candidate_files=cand,
+            parent_files=_PARENT,
+            eval_messages=[message],
+            holdout_ids=[],
+        )
+        == "memorized_case_text"
+    )
+
+
 def test_short_shared_phrase_is_allowed() -> None:
     # Fewer than 8 shared words must not trip the anti-overfit check.
     message = "water heater leaking in the basement"

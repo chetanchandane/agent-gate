@@ -167,8 +167,11 @@ def _move_case_with_meta(src: Path, dst: Path, new_version: str) -> None:
     src.unlink()
 
 
-def _git_commit(root: Path, message: str) -> None:
-    subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
+def _git_commit(root: Path, message: str, paths: list[Path]) -> None:
+    subprocess.run(
+        ["git", "-C", str(root), "add", "--", *(str(path) for path in paths)],
+        check=True,
+    )
     subprocess.run(["git", "-C", str(root), "commit", "-m", message], check=True)
 
 
@@ -288,10 +291,21 @@ async def run_round(
             f"(dev {dev_delta:+.2f}, {len(moved)} promoted)[/green]"
         )
         if git_commit:
+            commit_paths = [
+                Path("policies") / new_version,
+                Path("policies") / "ACTIVE",
+                Path("reports") / "decisions" / f"{cand_id}.json",
+                Path("reports") / "history.jsonl",
+            ]
+            commit_paths.extend(
+                Path("evals") / "safeguard" / f"{case_id}.yaml" for case_id in moved
+            )
+            commit_paths.extend(Path("evals") / "dev" / f"{case_id}.yaml" for case_id in moved)
             _git_commit(
                 root,
                 f"policy: {new_version} accepted (dev {dev_delta:+.2f}, "
                 f"{len(decision.rules.R2.regressed_cases) if decision.rules else 0} regressions)",
+                commit_paths,
             )
     else:
         _reject(root, cand_id, candidate_files, decision)
@@ -324,6 +338,8 @@ async def run_improve(
     git_commit: bool = False,
 ) -> list[GateDecision]:
     """Run the full improve loop for the given number of rounds."""
+    if rounds < 1:
+        raise ValueError("rounds must be at least 1")
     config = load_gate_config(root)
     sets = {name: load_set(root / "evals" / name) for name in _SETS}
     rejected: list[RejectedSummary] = []

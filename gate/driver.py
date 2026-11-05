@@ -159,6 +159,8 @@ async def _run_baseline_sets(
 
 def run_improve_live(root: Path, console: Console, rounds: int, git_commit: bool) -> None:
     """Build a live context and run the improve loop for the given rounds."""
+    if rounds < 1:
+        raise ConfigError("rounds must be at least 1")
     from gate.loop import run_improve
 
     ctx = build_live_context(root, Settings())

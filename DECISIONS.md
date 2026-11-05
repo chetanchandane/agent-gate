@@ -174,6 +174,10 @@ One dated entry per deviation from the PRD or notable implementation choice.
   case definition. This prevents stale grades after judge configuration or case
   expectations change. Baseline sets run on one event loop so the shared,
   concurrency-safe spend tracker remains valid across all three sets.
+- The optional policy commit stages only files produced by that accepted round.
+  It never uses `git add -A`, so unrelated worktree changes and artifacts cannot
+  be swept into an automated commit. Policy-guard word matching tokenizes
+  punctuation consistently, and non-positive improve rounds are rejected.
 
 ## 2026-11-04 M4 gate
 
