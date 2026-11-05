@@ -22,6 +22,7 @@ app = typer.Typer(
     add_completion=False,
 )
 
+
 @app.command()
 def validate() -> None:
     """Validate every case file, policy directory, and config file."""

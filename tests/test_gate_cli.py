@@ -104,7 +104,9 @@ def test_run_cost_flags_unknown_spend(tmp_path: Path) -> None:
     cache.put("k1", _scored("c1", None))
     console, buffer = _console()
     driver.run_cost(tmp_path, console)
-    assert "unknown" in buffer.getvalue()
+    output = buffer.getvalue()
+    assert "unknown" in output
+    assert "remaining" in output
 
 
 def test_print_trace_renders_span_tree(tmp_path: Path) -> None:

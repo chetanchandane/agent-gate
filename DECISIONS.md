@@ -375,6 +375,17 @@ One dated entry per deviation from the PRD or notable implementation choice.
 
 ## 2026-11-05 M8 CI gate, CLI completion, README, demo
 
+- The initial gate workflow checked out and installed the PR revision while
+  exposing the API key and a write-capable token. It now runs trusted base code
+  under `pull_request_target` and checks out the PR only as a policy-input
+  directory. The gate reads the base commit SHA, not a moving branch ref.
+- The initial workflow interpolated the untrusted `policies/ACTIVE` contents
+  into a shell command through a step output. It now reads the values into
+  quoted shell variables and validates their version shape before use.
+- `agent-gate cost` previously printed a numeric remaining budget even when
+  some cached attempt costs were unknown. It now reports the remaining budget
+  as unknown in that case instead of implying false precision.
+
 - The `agent-gate gate` command is the CI entry point. It loads a candidate
   policy directory and a baseline directory (the baseline defaults to the
   repository's active policy), runs both on all three sets, and reuses

@@ -82,10 +82,11 @@ docs/     # PRD.md
   `ruff format --check`, `mypy`, offline `pytest`, and `agent-gate validate`.
   It never needs an API key.
 - `gate.yml` runs on pull requests that change `policies/**`. It checks out the
-  base branch, runs `agent-gate gate` on the PR's candidate policy against the
-  base policy with `MAX_SPEND_USD=5`, posts the R1 to R4 decision table as a PR
-  comment (updated on reruns), and fails the job if the candidate is rejected.
-  It is skipped for forks, which cannot read the API key secret.
+  immutable base revision as the executable checkout and the PR head only as
+  policy input, then runs `agent-gate gate` against the base policy with
+  `MAX_SPEND_USD=5`. It posts the R1 to R4 decision table as a PR comment
+  (updated on reruns), and fails the job if the candidate is rejected. It is
+  skipped for forks, which cannot read the API key secret.
 
 ## Reports
 

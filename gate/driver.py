@@ -203,7 +203,12 @@ def run_cost(root: Path, console: Console) -> None:
     table.add_row("cached attempts", str(len(attempts)))
     table.add_row("recorded spend", spend_str)
     table.add_row("spend cap", f"${settings.max_spend_usd:.2f}")
-    table.add_row("remaining", f"${max(0.0, settings.max_spend_usd - total):.4f}")
+    remaining = (
+        f"${max(0.0, settings.max_spend_usd - total):.4f}"
+        if cost_known
+        else "unknown (some cached costs are unknown)"
+    )
+    table.add_row("remaining", remaining)
     console.print(table)
     if not cache_path.is_file():
         console.print("[yellow]No run cache yet; nothing has been spent.[/yellow]")
