@@ -36,10 +36,15 @@ def test_build_live_context_with_key(tmp_path: Path) -> None:
 
 
 def test_active_version_and_load_policy_against_repo() -> None:
+    # ACTIVE advances past v1 once the improve loop accepts a candidate, so read
+    # the current active version rather than pinning it.
     root = Path(__file__).parents[1]
-    assert driver.active_version(root) == "v1"
-    policy = driver.load_policy(root, "v1")
-    assert policy.version == "v1"
+    active = driver.active_version(root)
+    assert active.startswith("v")
+    policy = driver.load_policy(root, active)
+    assert policy.version == active
+    # v1 is always present as the baseline, whatever ACTIVE points to.
+    assert driver.load_policy(root, "v1").version == "v1"
 
 
 def test_load_benchmark_sets_resolves_locked_ids() -> None:

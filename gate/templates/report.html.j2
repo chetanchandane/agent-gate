@@ -22,6 +22,10 @@
   svg .after { fill: #3b82f6; }
   ul { margin-top: 0.3rem; }
   footer { color: #666; font-size: 0.85rem; margin-top: 2rem; }
+  .about { background: rgba(127,127,127,0.08); border-radius: 8px;
+           padding: 1rem 1.25rem; margin-bottom: 1.5rem; }
+  .about h2 { margin-top: 0; font-size: 1.1rem; }
+  .about p { margin: 0.5rem 0; }
 </style>
 </head>
 <body>
@@ -33,6 +37,34 @@
   first <code>{{ data.first_version or "n/a" }}</code> &middot;
   latest <code>{{ data.latest_version or "n/a" }}</code>
 </p>
+
+<section class="about">
+  <h2>What this is</h2>
+  <p>
+    <strong>agent-gate</strong> is a regression gate for changes to an LLM
+    agent's behavior. The agent is a fictional home services booking and
+    dispatch assistant (HVAC, plumbing, electrical). Its behavior lives in
+    versioned plain text policy files, and those files are the only thing that
+    changes between versions.
+  </p>
+  <p>
+    An improver LLM reads the current version's failures and proposes edits. A
+    deterministic gate then accepts an edit only if it clearly improves a
+    <em>dev</em> set, causes no confirmed regression in a protected
+    <em>safeguard</em> set, holds on a hidden <em>holdout</em> set, and stays
+    within cost and latency budgets. Every decision is written to disk with the
+    numbers behind it. The improver never sees the holdout set.
+  </p>
+  <p>
+    This page is one run's evidence. Section 1 compares the first policy to the
+    latest on a frozen benchmark. Section 3, the rejected candidates table, is
+    the point of the project: it shows the gate turning away bad edits, both
+    ones the improver proposed and three deliberately bad policies written by
+    hand to test it, with the exact rules they failed and the cases they
+    regressed. Numbers are real and vary between runs because the model is non
+    deterministic; the intervals and sample sizes are shown throughout.
+  </p>
+</section>
 
 <section>
 <table>

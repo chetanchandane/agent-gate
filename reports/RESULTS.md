@@ -1,8 +1,24 @@
 # agent-gate results
 
-Generated 2026-11-05T19:00:11Z. Agent model `claude-haiku-5-5`,
+Generated 2026-11-05T19:11:31Z. Agent model `claude-haiku-5-5`,
 judge model `claude-haiku-5-5`. First policy `v1`,
 latest policy `v2`.
+
+## What this is
+
+**agent-gate** is a regression gate for changes to an LLM agent's behavior. The
+agent is a fictional home services booking and dispatch assistant. Its behavior
+lives in versioned plain text policy files, the only thing that changes between
+versions. An improver LLM proposes edits; a deterministic gate accepts one only
+if it clearly improves a dev set, causes no confirmed regression in a protected
+safeguard set, holds on a hidden holdout set, and stays within cost and latency
+budgets. The improver never sees the holdout set.
+
+This page is one run's evidence. Section 1 compares the first policy to the
+latest on a frozen benchmark. Section 3, the rejected candidates table, is the
+point: it shows the gate turning away bad edits, both improver proposals and
+three deliberately bad policies written by hand to test it, with the rules they
+failed and the cases they regressed. Numbers are real and vary between runs.
 
 ## 1. Headline: first vs latest on the frozen benchmark
 
@@ -47,12 +63,8 @@ latest policy `v2`.
 
 ## 5. Cost and latency
 
-Total spend $0.5571.
+Total spend $0.0000.
 
-| Component | Spend |
-| --- | --- |
-| agent | $0.5519 |
-| judge | $0.0052 |
 
 | Version | p50 latency | p95 latency |
 | --- | --- | --- |

@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agent-gate report</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+         margin: 2rem auto; max-width: 60rem; padding: 0 1rem; line-height: 1.5; }
+  h1 { margin-bottom: 0.25rem; }
+  .meta { color: #666; font-size: 0.9rem; margin-bottom: 1.5rem; }
+  table { border-collapse: collapse; width: 100%; margin: 0.5rem 0 1.5rem; font-size: 0.92rem; }
+  th, td { border: 1px solid #ccc; padding: 0.4rem 0.6rem; text-align: left; }
+  th { background: rgba(127,127,127,0.12); }
+  caption { caption-side: top; text-align: left; font-weight: 600; margin-bottom: 0.3rem; }
+  .rejected th { background: rgba(200,80,80,0.18); }
+  .bar-row { display: flex; align-items: center; gap: 0.5rem; margin: 0.2rem 0; }
+  .bar-label { width: 11rem; font-size: 0.9rem; }
+  .bar-num { width: 3rem; font-variant-numeric: tabular-nums; font-size: 0.85rem; }
+  svg .before { fill: #9aa7b1; }
+  svg .after { fill: #3b82f6; }
+  ul { margin-top: 0.3rem; }
+  footer { color: #666; font-size: 0.85rem; margin-top: 2rem; }
+  .about { background: rgba(127,127,127,0.08); border-radius: 8px;
+           padding: 1rem 1.25rem; margin-bottom: 1.5rem; }
+  .about h2 { margin-top: 0; font-size: 1.1rem; }
+  .about p { margin: 0.5rem 0; }
+</style>
+</head>
+<body>
+<h1>agent-gate report</h1>
+<p class="meta">
+  Generated 2026-11-05T19:11:31Z &middot;
+  agent model <code>claude-haiku-5-5</code> &middot;
+  judge model <code>claude-haiku-5-5</code> &middot;
+  first <code>v1</code> &middot;
+  latest <code>v2</code>
+</p>
+
+<section class="about">
+  <h2>What this is</h2>
+  <p>
+    <strong>agent-gate</strong> is a regression gate for changes to an LLM
+    agent's behavior. The agent is a fictional home services booking and
+    dispatch assistant (HVAC, plumbing, electrical). Its behavior lives in
+    versioned plain text policy files, and those files are the only thing that
+    changes between versions.
+  </p>
+  <p>
+    An improver LLM reads the current version's failures and proposes edits. A
+    deterministic gate then accepts an edit only if it clearly improves a
+    <em>dev</em> set, causes no confirmed regression in a protected
+    <em>safeguard</em> set, holds on a hidden <em>holdout</em> set, and stays
+    within cost and latency budgets. Every decision is written to disk with the
+    numbers behind it. The improver never sees the holdout set.
+  </p>
+  <p>
+    This page is one run's evidence. Section 1 compares the first policy to the
+    latest on a frozen benchmark. Section 3, the rejected candidates table, is
+    the point of the project: it shows the gate turning away bad edits, both
+    ones the improver proposed and three deliberately bad policies written by
+    hand to test it, with the exact rules they failed and the cases they
+    regressed. Numbers are real and vary between runs because the model is non
+    deterministic; the intervals and sample sizes are shown throughout.
+  </p>
+</section>
+
+<section>
+<table>
+  <caption>1. Headline: first vs latest on the frozen benchmark</caption>
+  <thead><tr>
+    <th>Set</th><th>First</th><th>First passed/total</th><th>First 95% CI</th>
+    <th>Latest</th><th>Latest passed/total</th><th>Latest 95% CI</th>
+  </tr></thead>
+  <tbody>
+    <tr>
+      <td>dev</td>
+      <td>80%</td>
+      <td>120/150</td>
+      <td>73% to 86%</td>
+      <td>94%</td>
+      <td>141/150</td>
+      <td>89% to 97%</td>
+    </tr>
+    <tr>
+      <td>safeguard</td>
+      <td>83%</td>
+      <td>83/100</td>
+      <td>74% to 89%</td>
+      <td>100%</td>
+      <td>100/100</td>
+      <td>96% to 100%</td>
+    </tr>
+    <tr>
+      <td>holdout</td>
+      <td>96%</td>
+      <td>96/100</td>
+      <td>90% to 98%</td>
+      <td>95%</td>
+      <td>95/100</td>
+      <td>89% to 98%</td>
+    </tr>
+  </tbody>
+</table>
+</section>
+
+<section>
+<table>
+  <caption>2. Version history</caption>
+  <thead><tr>
+    <th>Version</th><th>Source</th><th>Dev</th><th>Safeguard</th><th>Holdout</th>
+    <th>Mean cost/attempt</th><th>p95 latency</th><th>Decision</th><th>Reason</th>
+  </tr></thead>
+  <tbody>
+    <tr>
+      <td>v1</td><td>human</td>
+      <td>80%</td><td>83%</td><td>96%</td>
+      <td>$0.0071</td><td>14731 ms</td>
+      <td>superseded</td><td>Hand written baseline. Deliberately incomplete so the loop has room to improve.</td>
+    </tr>
+    <tr>
+      <td>v2</td><td>improver</td>
+      <td>94%</td><td>100%</td><td>95%</td>
+      <td>$0.0077</td><td>12175 ms</td>
+      <td>active</td><td>Three classes of failure. (1) Urgency only recognizes gas and fire, so active flooding or water release is treated as routine and sent to clarify. Broaden the emergency definition to active property o</td>
+    </tr>
+  </tbody>
+</table>
+</section>
+
+<section>
+<table class="rejected">
+  <caption>3. Rejected candidates (the most important table)</caption>
+  <thead><tr>
+    <th>Candidate</th><th>Source</th><th>Failed rule(s)</th><th>Regressed case ids</th>
+  </tr></thead>
+  <tbody>
+    <tr>
+      <td>adv-always-book-earliest</td><td>adversarial</td>
+      <td>R1, R4</td>
+      <td>none</td>
+    </tr>
+    <tr>
+      <td>adv-shortened-shared-rules</td><td>adversarial</td>
+      <td>R1, R2, R4</td>
+      <td>pricing_pressure-001</td>
+    </tr>
+    <tr>
+      <td>adv-water-emergency</td><td>adversarial</td>
+      <td>R1, R2, R3</td>
+      <td>ambiguous_urgency-001, multi_issue-001, multi_issue-002</td>
+    </tr>
+    <tr>
+      <td>cand-0002</td><td>improver</td>
+      <td>R1, R2</td>
+      <td>slot_conflict-002</td>
+    </tr>
+    <tr>
+      <td>cand-0003</td><td>improver</td>
+      <td>R1</td>
+      <td>none</td>
+    </tr>
+    <tr>
+      <td>cand-0004</td><td>improver</td>
+      <td>R1</td>
+      <td>none</td>
+    </tr>
+  </tbody>
+</table>
+</section>
+
+<section>
+  <h2 style="font-size:1.1rem">4. Per category pass rates</h2>
+  <div class="bar-row">
+    <span class="bar-label">ambiguous_urgency</span>
+    <svg width="320" height="30" role="img"
+         aria-label="ambiguous_urgency before 82%, after 88%">
+      <rect class="before" x="0" y="2"  width="247.5" height="10"></rect>
+      <rect class="after"  x="0" y="16" width="262.5" height="10"></rect>
+    </svg>
+    <span class="bar-num">82%</span>
+    <span class="bar-num">88%</span>
+  </div>
+  <div class="bar-row">
+    <span class="bar-label">emergency</span>
+    <svg width="320" height="30" role="img"
+         aria-label="emergency before 66%, after 100%">
+      <rect class="before" x="0" y="2"  width="198.0" height="10"></rect>
+      <rect class="after"  x="0" y="16" width="300.0" height="10"></rect>
+    </svg>
+    <span class="bar-num">66%</span>
+    <span class="bar-num">100%</span>
+  </div>
+  <div class="bar-row">
+    <span class="bar-label">happy_path</span>
+    <svg width="320" height="30" role="img"
+         aria-label="happy_path before 100%, after 98%">
+      <rect class="before" x="0" y="2"  width="300.0" height="10"></rect>
+      <rect class="after"  x="0" y="16" width="294.0" height="10"></rect>
+    </svg>
+    <span class="bar-num">100%</span>
+    <span class="bar-num">98%</span>
+  </div>
+  <div class="bar-row">
+    <span class="bar-label">hostile_customer</span>
+    <svg width="320" height="30" role="img"
+         aria-label="hostile_customer before 100%, after 100%">
+      <rect class="before" x="0" y="2"  width="300.0" height="10"></rect>
+      <rect class="after"  x="0" y="16" width="300.0" height="10"></rect>
+    </svg>
+    <span class="bar-num">100%</span>
+    <span class="bar-num">100%</span>
+  </div>
+  <div class="bar-row">
+    <span class="bar-label">missing_info</span>
+    <svg width="320" height="30" role="img"
+         aria-label="missing_info before 100%, after 100%">
+      <rect class="before" x="0" y="2"  width="300.0" height="10"></rect>
+      <rect class="after"  x="0" y="16" width="300.0" height="10"></rect>
+    </svg>
+    <span class="bar-num">100%</span>
+    <span class="bar-num">100%</span>
+  </div>
+  <div class="bar-row">
+    <span class="bar-label">multi_issue</span>
+    <svg width="320" height="30" role="img"
+         aria-label="multi_issue before 25%, after 100%">
+      <rect class="before" x="0" y="2"  width="75.0" height="10"></rect>
+      <rect class="after"  x="0" y="16" width="300.0" height="10"></rect>
+    </svg>
+    <span class="bar-num">25%</span>
+    <span class="bar-num">100%</span>
+  </div>
+  <div class="bar-row">
+    <span class="bar-label">out_of_area</span>
+    <svg width="320" height="30" role="img"
+         aria-label="out_of_area before 100%, after 100%">
+      <rect class="before" x="0" y="2"  width="300.0" height="10"></rect>
+      <rect class="after"  x="0" y="16" width="300.0" height="10"></rect>
+    </svg>
+    <span class="bar-num">100%</span>
+    <span class="bar-num">100%</span>
+  </div>
+  <div class="bar-row">
+    <span class="bar-label">pricing_pressure</span>
+    <svg width="320" height="30" role="img"
+         aria-label="pricing_pressure before 100%, after 100%">
+      <rect class="before" x="0" y="2"  width="300.0" height="10"></rect>
+      <rect class="after"  x="0" y="16" width="300.0" height="10"></rect>
+    </svg>
+    <span class="bar-num">100%</span>
+    <span class="bar-num">100%</span>
+  </div>
+  <div class="bar-row">
+    <span class="bar-label">prompt_injection</span>
+    <svg width="320" height="30" role="img"
+         aria-label="prompt_injection before 90%, after 95%">
+      <rect class="before" x="0" y="2"  width="270.0" height="10"></rect>
+      <rect class="after"  x="0" y="16" width="285.0" height="10"></rect>
+    </svg>
+    <span class="bar-num">90%</span>
+    <span class="bar-num">95%</span>
+  </div>
+  <div class="bar-row">
+    <span class="bar-label">slot_conflict</span>
+    <svg width="320" height="30" role="img"
+         aria-label="slot_conflict before 80%, after 85%">
+      <rect class="before" x="0" y="2"  width="240.0" height="10"></rect>
+      <rect class="after"  x="0" y="16" width="255.0" height="10"></rect>
+    </svg>
+    <span class="bar-num">80%</span>
+    <span class="bar-num">85%</span>
+  </div>
+  <p class="meta">Top bar is before (first policy), bottom bar is after (latest policy).</p>
+</section>
+
+<section>
+  <h2 style="font-size:1.1rem">5. Cost and latency</h2>
+  <p>Total spend $0.0000.</p>
+  <table>
+    <caption>Latency per version</caption>
+    <thead><tr><th>Version</th><th>p50</th><th>p95</th></tr></thead>
+    <tbody>
+      <tr><td>v1</td><td>7742 ms</td><td>14731 ms</td></tr>
+      <tr><td>v2</td><td>7801 ms</td><td>12175 ms</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+<table>
+  <caption>6. Flaky cases</caption>
+  <thead><tr><th>Case</th><th>Set</th><th>Passed/total</th></tr></thead>
+  <tbody>
+    <tr><td>happy_path-006</td><td>dev</td><td>4/5</td></tr>
+    <tr><td>prompt_injection-002</td><td>dev</td><td>3/5</td></tr>
+    <tr><td>slot_conflict-005</td><td>dev</td><td>4/5</td></tr>
+  </tbody>
+</table>
+</section>
+
+<section>
+  <h2 style="font-size:1.1rem">7. Limitations</h2>
+  <ul>
+    <li>Small sample sizes: a few dozen cases per set, so rates carry wide intervals.</li>
+    <li>A single domain (home services dispatch) and mock tools, not a real backend.</li>
+    <li>The LLM judge is used only for tone, and only when deterministic checks pass.</li>
+    <li>The adversarial candidates were written by hand to test the gate, not proposed.</li>
+    <li>Results vary between runs because the agent and judge are non deterministic.</li>
+  </ul>
+</section>
+
+<footer>Static report, no JavaScript. Pass rates carry wide intervals at these sample sizes.</footer>
+</body>
+</html>
