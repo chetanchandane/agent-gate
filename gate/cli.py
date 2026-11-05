@@ -78,7 +78,15 @@ def baseline() -> None:
 @app.command()
 def improve(rounds: int = 6, git_commit: bool = False) -> None:
     """The main loop: propose, guard, run, gate, accept or reject, promote."""
-    raise typer.Exit(_fail())
+    from rich.console import Console
+
+    from gate import driver
+
+    try:
+        driver.run_improve_live(Path.cwd(), Console(), rounds, git_commit)
+    except ConfigError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
 
 
 @app.command()

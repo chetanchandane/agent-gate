@@ -215,3 +215,60 @@ One dated entry per deviation from the PRD or notable implementation choice.
   table for both severities), R3 (single-case and small-drop-within-tolerance),
   R4 (within budget, cost over, latency over, unknown cost), the overfit warning,
   and `decide` end to end (clean accept, guard short-circuit, R1 rejection).
+
+## 2026-11-05 M5 improver, loop, and policy guard
+
+- `gate/policy_guard.py` is pure: it takes the candidate files, the parent
+  files, the eval messages, and the holdout ids as plain data and returns a bare
+  violation reason or None. It never reads the policy or case files itself, so it
+  has no network, file, or clock access. The gate prefixes the reason with
+  `policy_guard:` in the decision record. The change-size limit is a unified diff
+  against the parent; the anti-overfitting check normalizes whitespace and case,
+  then looks for any run of eight or more consecutive words from any eval message
+  appearing verbatim in the concatenated policy text.
+- `gate/improver_input.py` makes holdout leakage impossible by construction. The
+  builder's parameters are the active policy, a dev `SetResult`, the dev cases,
+  and safeguard summaries typed as `SafeguardStatus` (id and pass or fail only).
+  There is no holdout parameter, so a holdout result is a type error rather than
+  a runtime check. Failing dev cases are the lowest-scoring, at most two per
+  category and eight in total, each with a compact trace drawn from one recorded
+  failing attempt. `tests/test_no_holdout_leak.py` serializes the real improver
+  prompt and asserts no holdout id or message snippet appears, and that safeguard
+  entries expose nothing but id and passed.
+- `gate/improver.py` keeps the pure parts (the `Proposal`/`Edit` models, JSON
+  parsing with code-fence stripping, and `apply_edits`) separate from the single
+  impure `propose` call. `apply_edits` rejects an unknown file, an unknown op, a
+  `str_replace` whose `old` is missing or not unique, and an append or
+  replace_file with no text, so a bad proposal never yields a half-applied
+  candidate. `propose` retries once with the validation error fed back, then
+  raises `InvalidProposal`; the loop records that as `invalid_proposal` without
+  running the candidate.
+- The improver system prompt lives in `gate/prompts/improver.md` as code, not
+  policy, per section 8, and the improver input is serialized to the user message
+  as JSON so the structure is unambiguous and contains only allowed fields.
+- `gate/loop.py` is the impure orchestration behind `agent-gate improve`: per
+  round it runs the active and candidate policies on all three sets (cached),
+  builds the improver input, proposes, guards, gates, writes the decision record
+  and history line, and either accepts (new version, manifest, ACTIVE, dev to
+  safeguard promotion with a `promoted_in` meta block, optional git commit) or
+  files the candidate under `policies/rejected/<id>/` with its decision. A
+  rejected round's reason feeds the next round's input.
+- The R2 confirmation reruns are async, but `gate.decide` calls `confirm`
+  synchronously. The loop resolves this by first computing the flagged cases with
+  `check_r2` (no confirm), then awaiting the reruns for each flag to build a
+  `case_id -> (a_failures, c_failures)` map, and finally passing `decide` a
+  synchronous lookup into that map. This keeps the gate pure and synchronous while
+  the impure reruns happen in the loop, bypassing the cache as the PRD requires.
+- As with the live `baseline`, the live `agent-gate improve` run was not executed
+  in this milestone: it needs a real API key and spends against the cap. The loop
+  side effects and pure helpers (version bump, promotion with meta, accept and
+  reject file writes, config load, the no-run rejection record) are proven offline
+  in `tests/test_loop.py`; the full live round is left for the user to start
+  deliberately. This is why `gate/loop.py` line coverage is lower than the other
+  gate modules: the end-to-end `run_round` path runs the agent graph and the
+  improver live.
+- Tooling note: `uv run agent-gate ...` sometimes re-syncs the environment and
+  transiently drops the editable install, giving `ModuleNotFoundError: gate`.
+  `uv run --no-sync agent-gate ...` or a reinstall resolves it. This is the same
+  editable-install gremlin recorded in the M2 entry, not a code fault; the CLI
+  imports cleanly under `uv run python -c "from gate.cli import app"`.

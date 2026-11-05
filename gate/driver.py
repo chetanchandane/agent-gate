@@ -157,6 +157,15 @@ async def _run_baseline_sets(
     return results, None
 
 
+def run_improve_live(root: Path, console: Console, rounds: int, git_commit: bool) -> None:
+    """Build a live context and run the improve loop for the given rounds."""
+    from gate.loop import run_improve
+
+    ctx = build_live_context(root, Settings())
+    asyncio.run(run_improve(ctx, root, console, rounds, git_commit=git_commit))
+    _print_spend(console, ctx)
+
+
 def promote_weak_safeguard(
     root: Path, result: SetResult, threshold: float = _SAFEGUARD_THRESHOLD
 ) -> list[str]:
