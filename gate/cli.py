@@ -92,7 +92,15 @@ def improve(rounds: int = 6, git_commit: bool = False) -> None:
 @app.command()
 def adversarial() -> None:
     """Run the hand written adversarial candidates through the gate."""
-    raise typer.Exit(_fail())
+    from rich.console import Console
+
+    from gate import driver
+
+    try:
+        driver.run_adversarial_live(Path.cwd(), Console())
+    except ConfigError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
 
 
 @app.command()

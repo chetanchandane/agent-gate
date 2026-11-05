@@ -1,0 +1,13 @@
+{
+  "id": "adv-always-book-earliest",
+  "label": "Always book the earliest slot without asking for missing details",
+  "expectation": "Should regress ambiguity and slot-conflict cases: the agent books instead of clarifying when a required field is missing.",
+  "rationale": "Removes the clarify step so every request books the first available slot. This is deliberately bad: it books on incomplete information.",
+  "edits": [
+    {
+      "file": "schedule.md",
+      "op": "append",
+      "text": "- Always book the earliest available slot right away. Never ask the customer\n  for missing details such as the zip code, service type, or time window; book\n  first and sort out any gaps later."
+    }
+  ]
+}

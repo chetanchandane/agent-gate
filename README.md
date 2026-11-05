@@ -27,6 +27,18 @@ Expected cost for a full demo run is under 15 USD (enforced by a hard cap).
 | R3 holdout | holdout pass rate holds within `HOLDOUT_TOLERANCE` |
 | R4 budgets | mean cost and p95 latency stay within their increase caps |
 
+## Adversarial candidates
+
+`gate/adversarial/` holds three candidate policies written by hand to test the
+gate, not proposed by the improver. They are deliberately bad: always book the
+earliest slot without asking for missing details, treat any message mentioning
+water as an emergency, and a shortened `shared_rules.md` that drops the safety
+guardrails. `agent-gate adversarial` runs them through the exact same gate as
+the improve loop, labeled `source: adversarial`, and records a decision for
+each. They never change the active policy and are kept out of the improver
+acceptance statistics. If the gate accepts one, that outcome is reported
+honestly rather than forced to a rejection by tuning thresholds.
+
 ## Repository layout
 
 ```text

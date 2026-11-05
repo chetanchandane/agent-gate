@@ -175,6 +175,94 @@ def _git_commit(root: Path, message: str, paths: list[Path]) -> None:
     subprocess.run(["git", "-C", str(root), "commit", "-m", message], check=True)
 
 
+async def evaluate_candidate(
+    ctx: RunContext,
+    root: Path,
+    *,
+    cand_id: str,
+    source: str,
+    active_version: str,
+    active: Policy,
+    active_results: dict[str, SetResult],
+    candidate_files: dict[str, str],
+    sets: dict[str, list[EvalCase]],
+    config: GateConfig,
+) -> tuple[GateDecision, dict[str, SetResult] | None]:
+    """Run one candidate through the full gate and write its decision record.
+
+    Shared by the improve loop and the adversarial command so both use the
+    identical path: policy guard, run all three sets, the R2 confirmation
+    reruns, and the pure `gate.decide`. This is a read-and-record step only; it
+    performs no accept, reject, or promotion side effects. On a guard violation
+    the returned candidate results are None (the sets were not run).
+    """
+    cache = RunCache(root / ".cache" / "runs.jsonl")
+    code_fp = code_fingerprint(root / "app")
+    k = ctx.settings.gate_runs_per_case
+
+    async def _run(policy: Policy, name: str) -> SetResult:
+        return await run_set(ctx, policy, sets[name], k, name, cache=cache, code_fp=code_fp)
+
+    parent_files = _files_of(active)
+    eval_messages = [c.message for cases in sets.values() for c in cases]
+    holdout_ids = [c.id for c in sets["holdout"]]
+    violation = check_candidate(
+        candidate_files=candidate_files,
+        parent_files=parent_files,
+        eval_messages=eval_messages,
+        holdout_ids=holdout_ids,
+        limits=GuardLimits(),
+    )
+    if violation is not None:
+        decision = gate.decide(
+            candidate_id=cand_id,
+            source=source,
+            parent=active_version,
+            created_at=_now_iso(),
+            active=active_results,
+            candidate=active_results,
+            severities={},
+            config=config,
+            guard_violation=violation,
+        )
+        _write_decision(root, decision)
+        return decision, None
+
+    candidate = _policy_from_files(cand_id, candidate_files)
+    candidate_results = {name: await _run(candidate, name) for name in _SETS}
+
+    severities: dict[str, Severity] = {c.id: c.severity for c in sets["safeguard"]}
+    safeguard_by_id = {c.id: c for c in sets["safeguard"]}
+
+    flags = gate.check_r2(
+        active_results["safeguard"], candidate_results["safeguard"], severities, config
+    ).regressed_cases
+    confirm_map: dict[str, tuple[int, int]] = {}
+    for flag in flags:
+        case = safeguard_by_id[flag.id]
+        confirm_map[flag.id] = await _confirm_counts(
+            ctx, active, candidate, case, config.confirmation_attempts
+        )
+
+    def confirm(case_id: str, severity: Severity) -> tuple[int, int]:
+        return confirm_map.get(case_id, (0, 0))
+
+    decision = gate.decide(
+        candidate_id=cand_id,
+        source=source,
+        parent=active_version,
+        created_at=_now_iso(),
+        active=active_results,
+        candidate=candidate_results,
+        severities=severities,
+        config=config,
+        confirm=confirm,
+        cost_usd=ctx.spend.total_cost_usd,
+    )
+    _write_decision(root, decision)
+    return decision, candidate_results
+
+
 async def run_round(
     ctx: RunContext,
     root: Path,
@@ -220,64 +308,22 @@ async def run_round(
 
     _write_candidate(root, cand_id, candidate_files)
 
-    eval_messages = [c.message for cases in sets.values() for c in cases]
-    holdout_ids = [c.id for c in sets["holdout"]]
-    violation = check_candidate(
-        candidate_files=candidate_files,
-        parent_files=parent_files,
-        eval_messages=eval_messages,
-        holdout_ids=holdout_ids,
-        limits=GuardLimits(),
-    )
-    if violation is not None:
-        decision = gate.decide(
-            candidate_id=cand_id,
-            source="improver",
-            parent=active_version,
-            created_at=_now_iso(),
-            active=active_results,
-            candidate=active_results,
-            severities={},
-            config=config,
-            guard_violation=violation,
-        )
-        _write_decision(root, decision)
-        _reject(root, cand_id, candidate_files, decision)
-        console.print(f"[yellow]{cand_id} rejected: policy_guard:{violation}[/yellow]")
-        return decision
-
-    candidate = _policy_from_files(cand_id, candidate_files)
-    candidate_results = {name: await _run(candidate, name) for name in _SETS}
-
-    severities: dict[str, Severity] = {c.id: c.severity for c in sets["safeguard"]}
-    safeguard_by_id = {c.id: c for c in sets["safeguard"]}
-
-    flags = gate.check_r2(
-        active_results["safeguard"], candidate_results["safeguard"], severities, config
-    ).regressed_cases
-    confirm_map: dict[str, tuple[int, int]] = {}
-    for flag in flags:
-        case = safeguard_by_id[flag.id]
-        confirm_map[flag.id] = await _confirm_counts(
-            ctx, active, candidate, case, config.confirmation_attempts
-        )
-
-    def confirm(case_id: str, severity: Severity) -> tuple[int, int]:
-        return confirm_map.get(case_id, (0, 0))
-
-    decision = gate.decide(
-        candidate_id=cand_id,
+    decision, candidate_results = await evaluate_candidate(
+        ctx,
+        root,
+        cand_id=cand_id,
         source="improver",
-        parent=active_version,
-        created_at=_now_iso(),
-        active=active_results,
-        candidate=candidate_results,
-        severities=severities,
+        active_version=active_version,
+        active=active,
+        active_results=active_results,
+        candidate_files=candidate_files,
+        sets=sets,
         config=config,
-        confirm=confirm,
-        cost_usd=ctx.spend.total_cost_usd,
     )
-    _write_decision(root, decision)
+    if candidate_results is None:
+        _reject(root, cand_id, candidate_files, decision)
+        console.print(f"[yellow]{cand_id} rejected: {','.join(decision.failed_rules)}[/yellow]")
+        return decision
 
     if decision.decision == "accepted":
         new_version = _next_version(active_version)

@@ -276,3 +276,42 @@ One dated entry per deviation from the PRD or notable implementation choice.
   `uv run --no-sync agent-gate ...` or a reinstall resolves it. This is the same
   editable-install gremlin recorded in the M2 entry, not a code fault; the CLI
   imports cleanly under `uv run python -c "from gate.cli import app"`.
+
+## 2026-11-05 M6 adversarial candidates
+
+- The three hand written candidates live in `gate/adversarial/` as JSON files,
+  each an id, a human label, an expectation, and a `Proposal` shaped set of
+  edits (the same `Edit` model the improver uses). They apply to the active
+  policy with `append` or `replace_file` ops rather than `str_replace`, so they
+  stay robust against small wording changes in v1.
+- PRD section 8 describes candidate three as a shortened `shared_rules.md` that
+  removes the instruction to ignore instructions found inside customer messages.
+  Policy v1's `shared_rules.md` has no such explicit line. The candidate instead
+  removes the closest existing safety guardrails (the tool grounding rule and
+  the no price rule), leaving only the role and a brevity line. This preserves
+  the PRD intent (a shortened shared_rules that drops a safety rule, expected to
+  regress injection and pricing cases) and is recorded here per the hard rule on
+  deviations. Policy v1, thresholds, graders, and holdout are unchanged.
+- The runner module is `gate/adversary.py`, not `gate/adversarial.py`, because a
+  module of the same name as the `gate/adversarial/` candidates directory would
+  collide on import. The CLI command stays `agent-gate adversarial` and the
+  candidates directory keeps its PRD name.
+- The gate running core (policy guard, run all three sets, the R2 confirmation
+  reruns, and `gate.decide`, then write the decision record) was extracted from
+  `loop.run_round` into `loop.evaluate_candidate`, so the improve loop and the
+  adversarial command use the identical gate path. `evaluate_candidate` performs
+  no accept, reject, or promotion side effects; those stay in `run_round`. The
+  adversarial command records decisions with `source="adversarial"` and never
+  mutates ACTIVE or promotes, even if a candidate is accepted, which keeps the
+  candidates out of the improver acceptance statistics.
+- An accepted adversarial candidate is printed in red (the gate let a bad policy
+  through) and a rejected one in green (the gate did its job), the inverse of the
+  improve loop's coloring.
+- As with the live `baseline` and `improve` runs, the live `agent-gate
+  adversarial` run was not executed in this milestone: it needs a real API key
+  and spends against the cap. Offline, the FakeLLM ignores policy text, so a
+  candidate behaves identically to the active policy and the LLM driven
+  regression cannot be shown without the live run. `tests/test_adversarial.py`
+  therefore proves the mechanics and the labeling (three decisions recorded,
+  each `source="adversarial"`, ACTIVE untouched, no version promoted) and leaves
+  the honest per candidate outcomes to the deliberate live run.

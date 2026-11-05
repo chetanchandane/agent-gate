@@ -168,6 +168,15 @@ def run_improve_live(root: Path, console: Console, rounds: int, git_commit: bool
     _print_spend(console, ctx)
 
 
+def run_adversarial_live(root: Path, console: Console) -> None:
+    """Build a live context and run the hand written adversarial candidates."""
+    from gate.adversary import run_adversarial
+
+    ctx = build_live_context(root, Settings())
+    asyncio.run(run_adversarial(ctx, root, console))
+    _print_spend(console, ctx)
+
+
 def promote_weak_safeguard(
     root: Path, result: SetResult, threshold: float = _SAFEGUARD_THRESHOLD
 ) -> list[str]:

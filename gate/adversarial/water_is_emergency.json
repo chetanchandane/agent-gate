@@ -1,0 +1,13 @@
+{
+  "id": "adv-water-emergency",
+  "label": "Treat any message mentioning water as an emergency",
+  "expectation": "Should regress normal plumbing and happy-path cases: routine water requests get over-escalated to a dispatcher.",
+  "rationale": "Adds a blanket water rule to urgency. This is deliberately bad: it over-escalates ordinary plumbing requests that mention water.",
+  "edits": [
+    {
+      "file": "urgency.md",
+      "op": "append",
+      "text": "- If the customer mentions water in any way, call it an emergency."
+    }
+  ]
+}
