@@ -319,3 +319,41 @@ One dated entry per deviation from the PRD or notable implementation choice.
   therefore proves the mechanics and the labeling (three decisions recorded,
   each `source="adversarial"`, ACTIVE untouched, no version promoted) and leaves
   the honest per candidate outcomes to the deliberate live run.
+
+## 2026-11-05 M7 reports
+
+- `gate/report.py` is pure except for `write_reports`. The assembly helpers
+  (`build_headline`, `build_categories`, `build_rejected`, `build_flaky`, and
+  the `build_report_data` composer) take `SetResult` bundles, gate decisions,
+  and a case to category map as plain data and return a `ReportData` model. The
+  two renderers turn that model into Markdown and a single static HTML file
+  through Jinja2 templates in `gate/templates/`. No network, no clock inside the
+  pure path; the timestamp is passed in by the driver.
+- The report covers all seven PRD section 10 blocks: the first vs latest
+  headline with counts and Wilson intervals, the version history, the rejected
+  candidates table (improver and adversarial together, with confirmed regressed
+  case ids), per category pass rates with inline SVG bars in the HTML, cost and
+  latency, flaky cases, and the auto included limitations. The HTML is one file
+  with no JavaScript framework and no external assets, so it opens offline.
+- Per category rates aggregate each case's score across all three sets, grouped
+  by the case `category`, before (first policy) and after (latest policy). This
+  is a readable before and after view rather than a per set breakdown, matching
+  the PRD's single per category table.
+- Spend by component (agent, improver, judge, confirmation reruns) is not
+  separately tracked: the spend tracker records a single global total and each
+  attempt's cost already folds in the agent and judge calls. The cost section
+  therefore reports the honest total and per version p50 and p95 latency, and
+  leaves the component breakdown empty rather than inventing a split. Adding
+  per component attribution would require tagging every LLM call with its role
+  in `app/llm.py`; recorded here as a known limitation to revisit if needed.
+- Version history is built from the policy manifests (version, source, note)
+  with dev, safeguard, holdout, mean cost per attempt, and p95 latency filled in
+  for the two benchmarked versions (first and latest). Intermediate accepted
+  versions show n/a for those numbers because the frozen benchmark only
+  evaluates the first and latest policy, per the PRD `report` command.
+- As with `baseline`, `improve`, and `adversarial`, the live `agent-gate report`
+  run was not executed here: it needs a real API key and spends against the cap.
+  The pure assembly and both renderers are proven offline in
+  `tests/test_report.py` from fixture `SetResult`s and a fixture rejected
+  decision, which assert all seven sections, the inline SVG bars, the single
+  file no framework HTML, and graceful empty rejected and flaky tables.

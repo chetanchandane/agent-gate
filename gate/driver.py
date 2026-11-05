@@ -10,6 +10,7 @@ the real work; this module only orchestrates and renders.
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 from pathlib import Path
 
 from rich.console import Console
@@ -22,10 +23,16 @@ from app.policy_types import Policy
 from app.settings import Settings
 from evals.schema import EvalCase, load_all, load_set
 from gate.cache import RunCache, code_fingerprint
+from gate.gate import GateDecision
 from gate.metrics import SetResult
+from gate.report import CostLatency, VersionRow
 from gate.runner import run_set
 
 _SAFEGUARD_THRESHOLD = 0.95
+
+
+def _now_iso() -> str:
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def build_live_context(root: Path, settings: Settings) -> RunContext:
@@ -175,6 +182,174 @@ def run_adversarial_live(root: Path, console: Console) -> None:
     ctx = build_live_context(root, Settings())
     asyncio.run(run_adversarial(ctx, root, console))
     _print_spend(console, ctx)
+
+
+def run_report_live(root: Path, console: Console, out_dir: Path) -> None:
+    """Evaluate the first and latest policy on the frozen benchmark and write reports."""
+    from gate import report
+
+    ctx = build_live_context(root, Settings())
+    sets: dict[str, list[EvalCase]] = dict(load_all(root / "evals").items())
+    first_version = "v1"
+    latest_version = active_version(root)
+    k = ctx.settings.gate_runs_per_case
+
+    first_policy = load_policy(root, first_version)
+    first = evaluate_baseline_quiet(ctx, root, first_policy, sets, k)
+    if latest_version == first_version:
+        latest = first
+    else:
+        latest = evaluate_baseline_quiet(ctx, root, load_policy(root, latest_version), sets, k)
+
+    data = report.build_report_data(
+        generated_at=_now_iso(),
+        agent_model=ctx.settings.agent_model,
+        judge_model=ctx.settings.judge_model,
+        first_version=first_version,
+        latest_version=latest_version,
+        first=first,
+        latest=latest,
+        categories=category_map(sets),
+        decisions=load_decisions(root),
+        versions=build_version_rows(root, first, latest, first_version, latest_version),
+        cost=build_cost_latency(ctx, first, latest, first_version, latest_version),
+    )
+    md_path, html_path = report.write_reports(out_dir, data)
+    console.print(f"[green]Wrote {md_path} and {html_path}[/green]")
+    _print_spend(console, ctx)
+
+
+def evaluate_baseline_quiet(
+    ctx: RunContext, root: Path, policy: Policy, sets: dict[str, list[EvalCase]], k: int
+) -> dict[str, SetResult]:
+    """Run every set under one policy without printing or promoting (frozen benchmark)."""
+    cache = RunCache(root / ".cache" / "runs.jsonl")
+    code_fp = code_fingerprint(root / "app")
+    results, _ = asyncio.run(_run_baseline_sets(ctx, policy, sets, k, cache, code_fp))
+    return results
+
+
+def category_map(sets: dict[str, list[EvalCase]]) -> dict[str, str]:
+    """Map each case id to its category, across all sets."""
+    return {case.id: case.category for cases in sets.values() for case in cases}
+
+
+def load_decisions(root: Path) -> list[GateDecision]:
+    """Load every decision record from reports/decisions, sorted by id."""
+    directory = root / "reports" / "decisions"
+    decisions: list[GateDecision] = []
+    if directory.is_dir():
+        for path in sorted(directory.glob("*.json")):
+            decisions.append(GateDecision.model_validate_json(path.read_text(encoding="utf-8")))
+    return decisions
+
+
+def build_version_rows(
+    root: Path,
+    first: dict[str, SetResult],
+    latest: dict[str, SetResult],
+    first_version: str,
+    latest_version: str,
+) -> list[VersionRow]:
+    """Build the version history from policy manifests, filling benchmark numbers."""
+    import yaml as _yaml
+
+    rows: list[VersionRow] = []
+    version_dirs = sorted(
+        (p for p in (root / "policies").glob("v*") if p.is_dir()),
+        key=lambda p: int("".join(ch for ch in p.name if ch.isdigit()) or "0"),
+    )
+    for vdir in version_dirs:
+        manifest: dict[str, object] = {}
+        manifest_path = vdir / "manifest.yaml"
+        if manifest_path.is_file():
+            manifest = _yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
+        version = vdir.name
+        if version == first_version:
+            results: dict[str, SetResult] | None = first
+        elif version == latest_version:
+            results = latest
+        else:
+            results = None
+        rows.append(
+            VersionRow(
+                version=version,
+                source=str(manifest.get("source", "unknown")),
+                dev=_set_rate(results, "dev"),
+                safeguard=_set_rate(results, "safeguard"),
+                holdout=_set_rate(results, "holdout"),
+                mean_cost_usd=_mean_cost(results),
+                p95_latency_ms=_p95_latency(results),
+                decision="active" if version == latest_version else "superseded",
+                reason=str(manifest.get("note", "")),
+            )
+        )
+    return rows
+
+
+def build_cost_latency(
+    ctx: RunContext,
+    first: dict[str, SetResult],
+    latest: dict[str, SetResult],
+    first_version: str,
+    latest_version: str,
+) -> CostLatency:
+    """Total spend and per-version latency for the report's cost section."""
+    from gate.report import VersionLatency
+
+    per_version: list[VersionLatency] = []
+    seen: dict[str, dict[str, SetResult]] = {first_version: first}
+    if latest_version != first_version:
+        seen[latest_version] = latest
+    for version, results in seen.items():
+        p50 = _p50_latency(results)
+        p95 = _p95_latency(results)
+        if p50 is not None and p95 is not None:
+            per_version.append(VersionLatency(version=version, p50_ms=p50, p95_ms=p95))
+    return CostLatency(
+        total_usd=ctx.spend.total_cost_usd,
+        cost_known=ctx.spend.cost_known,
+        components=[],
+        per_version_latency=per_version,
+    )
+
+
+def _set_rate(results: dict[str, SetResult] | None, name: str) -> float | None:
+    if results is None or name not in results:
+        return None
+    return results[name].metrics.pass_rate
+
+
+def _mean_cost(results: dict[str, SetResult] | None) -> float | None:
+    if results is None:
+        return None
+    attempts = [a for r in results.values() for a in r.scored]
+    known = [a.result.cost_usd for a in attempts if a.result.cost_usd is not None]
+    if not known or not attempts:
+        return None
+    return sum(known) / len(attempts)
+
+
+def _latencies(results: dict[str, SetResult] | None) -> list[float]:
+    if results is None:
+        return []
+    return [float(a.result.latency_ms) for r in results.values() for a in r.scored]
+
+
+def _p50_latency(results: dict[str, SetResult] | None) -> float | None:
+    return _percentile(_latencies(results), 0.50)
+
+
+def _p95_latency(results: dict[str, SetResult] | None) -> float | None:
+    return _percentile(_latencies(results), 0.95)
+
+
+def _percentile(values: list[float], q: float) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    idx = min(len(ordered) - 1, int(q * (len(ordered) - 1) + 0.5))
+    return ordered[idx]
 
 
 def promote_weak_safeguard(

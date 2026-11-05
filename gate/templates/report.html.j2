@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agent-gate report</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+         margin: 2rem auto; max-width: 60rem; padding: 0 1rem; line-height: 1.5; }
+  h1 { margin-bottom: 0.25rem; }
+  .meta { color: #666; font-size: 0.9rem; margin-bottom: 1.5rem; }
+  table { border-collapse: collapse; width: 100%; margin: 0.5rem 0 1.5rem; font-size: 0.92rem; }
+  th, td { border: 1px solid #ccc; padding: 0.4rem 0.6rem; text-align: left; }
+  th { background: rgba(127,127,127,0.12); }
+  caption { caption-side: top; text-align: left; font-weight: 600; margin-bottom: 0.3rem; }
+  .rejected th { background: rgba(200,80,80,0.18); }
+  .bar-row { display: flex; align-items: center; gap: 0.5rem; margin: 0.2rem 0; }
+  .bar-label { width: 11rem; font-size: 0.9rem; }
+  .bar-num { width: 3rem; font-variant-numeric: tabular-nums; font-size: 0.85rem; }
+  svg .before { fill: #9aa7b1; }
+  svg .after { fill: #3b82f6; }
+  ul { margin-top: 0.3rem; }
+  footer { color: #666; font-size: 0.85rem; margin-top: 2rem; }
+</style>
+</head>
+<body>
+<h1>agent-gate report</h1>
+<p class="meta">
+  Generated {{ data.generated_at }} &middot;
+  agent model <code>{{ data.agent_model or "n/a" }}</code> &middot;
+  judge model <code>{{ data.judge_model or "n/a" }}</code> &middot;
+  first <code>{{ data.first_version or "n/a" }}</code> &middot;
+  latest <code>{{ data.latest_version or "n/a" }}</code>
+</p>
+
+<section>
+<table>
+  <caption>1. Headline: first vs latest on the frozen benchmark</caption>
+  <thead><tr>
+    <th>Set</th><th>First</th><th>First passed/total</th><th>First 95% CI</th>
+    <th>Latest</th><th>Latest passed/total</th><th>Latest 95% CI</th>
+  </tr></thead>
+  <tbody>
+  {% for row in data.headline %}
+    <tr>
+      <td>{{ row.set_name }}</td>
+      <td>{{ row.first.pass_rate | pct }}</td>
+      <td>{{ row.first.attempts_passed }}/{{ row.first.attempts_total }}</td>
+      <td>{{ row.first.ci95_low | pct }} to {{ row.first.ci95_high | pct }}</td>
+      <td>{{ row.latest.pass_rate | pct }}</td>
+      <td>{{ row.latest.attempts_passed }}/{{ row.latest.attempts_total }}</td>
+      <td>{{ row.latest.ci95_low | pct }} to {{ row.latest.ci95_high | pct }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</section>
+
+<section>
+<table>
+  <caption>2. Version history</caption>
+  <thead><tr>
+    <th>Version</th><th>Source</th><th>Dev</th><th>Safeguard</th><th>Holdout</th>
+    <th>Mean cost/attempt</th><th>p95 latency</th><th>Decision</th><th>Reason</th>
+  </tr></thead>
+  <tbody>
+  {% for v in data.versions %}
+    <tr>
+      <td>{{ v.version }}</td><td>{{ v.source }}</td>
+      <td>{{ v.dev | pct }}</td><td>{{ v.safeguard | pct }}</td><td>{{ v.holdout | pct }}</td>
+      <td>{{ v.mean_cost_usd | usd }}</td><td>{{ v.p95_latency_ms | ms }}</td>
+      <td>{{ v.decision }}</td><td>{{ v.reason }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</section>
+
+<section>
+<table class="rejected">
+  <caption>3. Rejected candidates (the most important table)</caption>
+  <thead><tr>
+    <th>Candidate</th><th>Source</th><th>Failed rule(s)</th><th>Regressed case ids</th>
+  </tr></thead>
+  <tbody>
+  {% if data.rejected %}
+    {% for r in data.rejected %}
+    <tr>
+      <td>{{ r.candidate_id }}</td><td>{{ r.source }}</td>
+      <td>{{ r.failed_rules | join(", ") }}</td>
+      <td>{{ r.regressed_case_ids | join(", ") or "none" }}</td>
+    </tr>
+    {% endfor %}
+  {% else %}
+    <tr><td colspan="4">No candidates were rejected.</td></tr>
+  {% endif %}
+  </tbody>
+</table>
+</section>
+
+<section>
+  <h2 style="font-size:1.1rem">4. Per category pass rates</h2>
+  {% for c in data.categories %}
+  <div class="bar-row">
+    <span class="bar-label">{{ c.category }}</span>
+    <svg width="320" height="30" role="img"
+         aria-label="{{ c.category }} before {{ c.before | pct }}, after {{ c.after | pct }}">
+      <rect class="before" x="0" y="2"  width="{{ (c.before * 300) | round(1) }}" height="10"></rect>
+      <rect class="after"  x="0" y="16" width="{{ (c.after * 300) | round(1) }}" height="10"></rect>
+    </svg>
+    <span class="bar-num">{{ c.before | pct }}</span>
+    <span class="bar-num">{{ c.after | pct }}</span>
+  </div>
+  {% endfor %}
+  <p class="meta">Top bar is before (first policy), bottom bar is after (latest policy).</p>
+</section>
+
+<section>
+  <h2 style="font-size:1.1rem">5. Cost and latency</h2>
+  <p>Total spend {{ data.cost.total_usd | usd }}{% if not data.cost.cost_known %} (pricing unknown, estimated){% endif %}.</p>
+  {% if data.cost.components %}
+  <table>
+    <caption>Spend by component</caption>
+    <thead><tr><th>Component</th><th>Spend</th></tr></thead>
+    <tbody>
+    {% for comp in data.cost.components %}
+      <tr><td>{{ comp.name }}</td><td>{{ comp.cost_usd | usd }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+  {% if data.cost.per_version_latency %}
+  <table>
+    <caption>Latency per version</caption>
+    <thead><tr><th>Version</th><th>p50</th><th>p95</th></tr></thead>
+    <tbody>
+    {% for lat in data.cost.per_version_latency %}
+      <tr><td>{{ lat.version }}</td><td>{{ lat.p50_ms | ms }}</td><td>{{ lat.p95_ms | ms }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+
+<section>
+<table>
+  <caption>6. Flaky cases</caption>
+  <thead><tr><th>Case</th><th>Set</th><th>Passed/total</th></tr></thead>
+  <tbody>
+  {% if data.flaky %}
+    {% for f in data.flaky %}
+    <tr><td>{{ f.case_id }}</td><td>{{ f.set_name }}</td><td>{{ f.passed_attempts }}/{{ f.total_attempts }}</td></tr>
+    {% endfor %}
+  {% else %}
+    <tr><td colspan="3">No flaky cases in this run.</td></tr>
+  {% endif %}
+  </tbody>
+</table>
+</section>
+
+<section>
+  <h2 style="font-size:1.1rem">7. Limitations</h2>
+  <ul>
+  {% for item in data.limitations %}
+    <li>{{ item }}</li>
+  {% endfor %}
+  </ul>
+</section>
+
+<footer>Static report, no JavaScript. Pass rates carry wide intervals at these sample sizes.</footer>
+</body>
+</html>

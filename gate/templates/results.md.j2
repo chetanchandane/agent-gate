@@ -1,0 +1,79 @@
+# agent-gate results
+
+Generated {{ data.generated_at }}. Agent model `{{ data.agent_model or "n/a" }}`,
+judge model `{{ data.judge_model or "n/a" }}`. First policy `{{ data.first_version or "n/a" }}`,
+latest policy `{{ data.latest_version or "n/a" }}`.
+
+## 1. Headline: first vs latest on the frozen benchmark
+
+| Set | First pass rate | First (passed/total) | First 95% CI | Latest pass rate | Latest (passed/total) | Latest 95% CI |
+| --- | --- | --- | --- | --- | --- | --- |
+{% for row in data.headline %}
+| {{ row.set_name }} | {{ row.first.pass_rate | pct }} | {{ row.first.attempts_passed }}/{{ row.first.attempts_total }} | {{ row.first.ci95_low | pct }} to {{ row.first.ci95_high | pct }} | {{ row.latest.pass_rate | pct }} | {{ row.latest.attempts_passed }}/{{ row.latest.attempts_total }} | {{ row.latest.ci95_low | pct }} to {{ row.latest.ci95_high | pct }} |
+{% endfor %}
+
+## 2. Version history
+
+| Version | Source | Dev | Safeguard | Holdout | Mean cost/attempt | p95 latency | Decision | Reason |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+{% for v in data.versions %}
+| {{ v.version }} | {{ v.source }} | {{ v.dev | pct }} | {{ v.safeguard | pct }} | {{ v.holdout | pct }} | {{ v.mean_cost_usd | usd }} | {{ v.p95_latency_ms | ms }} | {{ v.decision }} | {{ v.reason }} |
+{% endfor %}
+
+## 3. Rejected candidates
+
+{% if data.rejected %}
+| Candidate | Source | Failed rule(s) | Regressed case ids |
+| --- | --- | --- | --- |
+{% for r in data.rejected %}
+| {{ r.candidate_id }} | {{ r.source }} | {{ r.failed_rules | join(", ") }} | {{ r.regressed_case_ids | join(", ") or "none" }} |
+{% endfor %}
+{% else %}
+No candidates were rejected.
+{% endif %}
+
+## 4. Per category pass rates
+
+| Category | Before | After |
+| --- | --- | --- |
+{% for c in data.categories %}
+| {{ c.category }} | {{ c.before | pct }} | {{ c.after | pct }} |
+{% endfor %}
+
+## 5. Cost and latency
+
+Total spend {{ data.cost.total_usd | usd }}{% if not data.cost.cost_known %} (pricing unknown, estimated){% endif %}.
+
+{% if data.cost.components %}
+| Component | Spend |
+| --- | --- |
+{% for comp in data.cost.components %}
+| {{ comp.name }} | {{ comp.cost_usd | usd }} |
+{% endfor %}
+{% endif %}
+
+{% if data.cost.per_version_latency %}
+| Version | p50 latency | p95 latency |
+| --- | --- | --- |
+{% for lat in data.cost.per_version_latency %}
+| {{ lat.version }} | {{ lat.p50_ms | ms }} | {{ lat.p95_ms | ms }} |
+{% endfor %}
+{% endif %}
+
+## 6. Flaky cases
+
+{% if data.flaky %}
+| Case | Set | Passed/total |
+| --- | --- | --- |
+{% for f in data.flaky %}
+| {{ f.case_id }} | {{ f.set_name }} | {{ f.passed_attempts }}/{{ f.total_attempts }} |
+{% endfor %}
+{% else %}
+No flaky cases in this run.
+{% endif %}
+
+## 7. Limitations
+
+{% for item in data.limitations %}
+- {{ item }}
+{% endfor %}

@@ -106,7 +106,15 @@ def adversarial() -> None:
 @app.command()
 def report(out: str = "reports/") -> None:
     """Evaluate the first and latest policy on the frozen benchmark."""
-    raise typer.Exit(_fail())
+    from rich.console import Console
+
+    from gate import driver
+
+    try:
+        driver.run_report_live(Path.cwd(), Console(), Path(out))
+    except ConfigError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
 
 
 @app.command()
